@@ -37,12 +37,39 @@ MAIN:
   rjmp MAIN
 
 TIMER0:
+  push TEMP
+  push FIGURA
+  push FILA
+  push COL
+  push ZL
+  push ZH
+
+  rcall SIGUIENTE_COLUMNA
+  rcall MOSTRAR_FIGURA
+
+  cpi COL, 7
+  brne FIN_ISR
+  inc FILA
+  cpi FILA, 8
+  brlo FIN_ISR
+  clr FILA
+  inc FIGURA
+  cpi FIGURA, 5
+  brlo FIN_ISR
+  clr FIGURA
 
 FIN_ISR:
+  pop ZH
+  pop ZL
+  pop COL
+  pop FILA
+  pop FIGURA
+  pop TEMP
+  reti
 
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
-Carita_Triste:
+Cara_Triste:
 .db 0x0, 0x24, 0x24, 0x0, 0x3C, 0x64, 0x0, 0x0
 Corazon:
 .db 0x0, 0x66, 0xFF, 0xFF, 0x7E, 0x3C, 0x18, 0x0 
