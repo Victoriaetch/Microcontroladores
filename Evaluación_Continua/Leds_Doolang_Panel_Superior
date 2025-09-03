@@ -4,7 +4,7 @@
 ; Author : Sofía Modernell
 ;
 
-.include <m328pdef.inc>
+.include "m328pdef.inc"
 .def CONTADOR = R18       ; paso dentro de secuencia
 .def SECUENCIA = R19      ; cual secuencia (0,1,2)
 .def TEMP = R20
