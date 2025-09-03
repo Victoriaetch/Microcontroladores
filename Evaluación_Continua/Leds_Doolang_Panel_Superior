@@ -1,0 +1,91 @@
+; Led_Izquierda_Derecha.asm
+;
+; Created: 3/9/2025 8:00:55
+; Author : Sofía Modernell
+;
+
+.include <m328pdef.inc>
+.def CONTADOR = R18       ; paso dentro de secuencia
+.def SECUENCIA = R19      ; cual secuencia (0,1,2)
+.def TEMP = R20
+
+ldi TEMP, 0xFF
+out DDRD, TEMP        ; Puerto D como salida
+clr CONTADOR
+clr SECUENCIA
+; Configuración Timer0 (normal mode)
+ldi TEMP, (1<<CS02)|(1<<CS00)   ; prescaler 1024
+out TCCR0B, TEMP
+ldi TEMP, (1<<TOIE0)            ; habilitar interrupción overflow
+sts TIMSK0, TEMP
+sei                             ; habilitar interrupciones globales
+
+
+MAIN:
+    rjmp MAIN       
+   .org 0x0020    
+
+
+TIMER0_OVF:
+    ; Avanza un paso en la secuencia actual
+    inc CONTADOR
+    cpi SECUENCIA, 0
+    breq LED_CORRE
+    cpi SECUENCIA, 1
+    breq LED_DESPLAZA
+    cpi SECUENCIA, 2
+    breq EXT_CENTRO
+
+    reti
+
+LED_CORRE:
+    andi CONTADOR, 0x07            ; 8 pasos
+    ldi ZL, low(TABLA_CORRE<<1)
+    ldi ZH, high(TABLA_CORRE<<1)
+    add ZL, CONTADOR
+    brcc LC1
+    inc ZH
+LC1: lpm
+    out PORTD, r0
+    cpi CONTADOR, 7                ; fin → cambiar secuencia
+    brne LC2
+    clr CONTADOR
+    inc SECUENCIA
+LC2: reti
+
+LED_DESPLAZA:
+    andi CONTADOR, 0x07
+    ldi ZL, low(TABLA_DESPLAZA<<1)
+    ldi ZH, high(TABLA_DESPLAZA<<1)
+    add ZL, CONTADOR
+    brcc LD1
+    inc ZH
+LD1: lpm
+    out PORTD, r0
+    cpi CONTADOR, 7
+    brne LD2
+    clr CONTADOR
+    inc SECUENCIA
+LD2: reti
+
+EXT_CENTRO:
+    andi CONTADOR, 0x0E            ; 15 pasos (ida y vuelta)
+    ldi ZL, low(TABLA_CENTRO<<1)
+    ldi ZH, high(TABLA_CENTRO<<1)
+    add ZL, CONTADOR
+    brcc EC1
+    inc ZH
+
+EC1: lpm
+    out PORTD, r0
+    cpi CONTADOR, 14
+    brne EC2
+    clr CONTADOR
+    ldi SECUENCIA, 0               ; volver a la primera
+EC2: reti
+
+
+;TABLAS
+TABLA_CORRE:   .db 0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
+TABLA_DESPLAZA:   .db 0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF
+TABLA_CENTRO: .db 0x81,0x42,0x24,0x18,0x3C,0x7E,0xFF,0x7E,0x3C,0x18,0x24,0x42,0x81,0x00
