@@ -7,7 +7,18 @@
 .def FILA = r19  ;fila dentro de la figura
 .def COL = r20  ;columna actual
 
+.org 0x0000
+  rjmp RESET
+.org 0x0020
+  rjmp TIMER0_COMPA_vect
 
+RESET:
+
+MAIN:
+
+TIMER0:
+
+FIN:ISR:
 
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
