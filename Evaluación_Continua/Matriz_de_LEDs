@@ -13,8 +13,28 @@
   rjmp TIMER0_COMPA_vect
 
 RESET:
+  ldi TEMP, 0xFF
+  out DDRB, TEMP
+  out DDRD, TEMP
+
+  clr FIGURA
+  clr FILA
+  clr COL
+
+  ldi TEMP,(1<<WGM01)
+  out TCCR0A, TEMP
+  ldi TEMP,(1<<CS02)|(1<<CS00)
+  out TCCR0B, TEMP
+  ldi TEMP, 250
+  out OCR0A, TEMP
+  ldi TEMP,(1<<OCIE0A)
+  sts TOMSK0, TEMP
+
+  sei
+  rjmp MAIN
 
 MAIN:
+  rjmp MAIN
 
 TIMER0:
 
