@@ -1,5 +1,13 @@
 .include <m328pdef.inc>
 
+.def TEMP = r16  ;para operaciones temporales
+.def ZH = r30  ;puntero Z para leer tablas
+.def ZL = r31
+.def FIGURA = r18  ;indice de la figura actual
+.def FILA = r19  ;fila dentro de la figura
+.def COL = r20  ;columna actual
+
+
 
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
