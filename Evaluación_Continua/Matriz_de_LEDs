@@ -28,7 +28,7 @@ RESET:
   ldi TEMP, 250
   out OCR0A, TEMP
   ldi TEMP,(1<<OCIE0A)
-  sts TOMSK0, TEMP
+  sts TIMSK0, TEMP
 
   sei
   rjmp MAIN
@@ -91,7 +91,7 @@ SALTAR:
 
 MOSTAR_FIG1:
 ; busca en la tabla el byte correspondiente a la fila actual, lo carga y envía a PORTD
-    ldi ZL, low(Cara_Feliz<<1 
+    ldi ZL, low(Cara_Feliz<<1 )
     ldi ZH, high(Cara_Feliz<<1)
     add ZL, FILA
     brcc CONT1
