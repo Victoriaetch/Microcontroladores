@@ -2,11 +2,13 @@
 .def CONTADOR = R18       ; paso dentro de secuencia
 .def SECUENCIA = R19      ; cual secuencia (0,1,2)
 .def TEMP = R20
+.def DIVISOR = R21        ; para dividir velocidad
 
 ldi TEMP, 0xFF
 out DDRD, TEMP        ; Puerto D como salida
 clr CONTADOR
 clr SECUENCIA
+clr DIVISOR 
 
 ; Configuración Timer0 (normal mode)
 ldi TEMP, (1<<CS02)|(1<<CS00)   ; prescaler 1024
@@ -15,15 +17,18 @@ ldi TEMP, (1<<TOIE0)            ; habilitar interrupción overflow
 sts TIMSK0, TEMP
 sei                             ; habilitar interrupciones globales
 
-
 MAIN:
     rjmp MAIN       
    .org 0x0020    
 
-
 TIMER0_OVF:
     ; Avanza un paso en la secuencia actual
-    inc CONTADOR
+    inc DIVISOR
+    cpi DIVISOR, 50
+    brne NO_UPDATE
+    clr DIVISOR           ; reset divisor
+
+inc CONTADOR
     cpi SECUENCIA, 0
     breq LED_CORRE
     cpi SECUENCIA, 1
@@ -31,6 +36,7 @@ TIMER0_OVF:
     cpi SECUENCIA, 2
     breq EXT_CENTRO
 
+NO_UPDATE:
     reti
 
 LED_CORRE:
@@ -64,22 +70,23 @@ LD1: lpm
 LD2: reti
 
 EXT_CENTRO:
-    andi CONTADOR, 0x0E            ; 15 pasos (ida y vuelta)
-    ldi ZL, low(TABLA_CENTRO<<1)
-    ldi ZH, high(TABLA_CENTRO<<1)
+    andi CONTADOR, 0x07          ; 8 pasos
+    ldi ZL, low(TABLA_CENTRO)
+    ldi ZH, high(TABLA_CENTRO)
     add ZL, CONTADOR
     adc ZH, r1
     lpm
     out PORTD, r0
     inc CONTADOR
     cpi CONTADOR, 8
+    brne EC_RETI
     clr CONTADOR
     ldi SECUENCIA, 0
 
-EC1: ret
-
+EC_RETI:
+    reti
 
 ;TABLAS
 TABLA_CORRE:   .db 0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80
 TABLA_DESPLAZA:   .db 0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF
-TABLA_CENTRO: .db 0x81,0xC3,0xE7,0xFF,0xE7,0x3C,0x81,0x00
+TABLA_CENTRO: .db 0x81,0xC3,0xE7,0xFF,0xE7,0xC3,0x81,0x00
