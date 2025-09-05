@@ -67,6 +67,20 @@ FIN_ISR:
   pop TEMP
   reti
 
+MOSTRAR_FIGURA:
+    ; función que 
+    ldi ZL, low(JUMP_TABLE<<1)
+    ldi ZH, high(JUMP_TABLE<<1)
+    add ZL, FIGURA
+    adc ZH, r1
+    lpm          
+    mov TEMP, r0
+    lpm          
+    mov r30, r0  
+    lpm
+    ijmp
+    ret
+
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
 Cara_Triste:
