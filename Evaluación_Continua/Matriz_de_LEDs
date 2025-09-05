@@ -145,6 +145,12 @@ CONT5:
     out PORTD, r0
     ret
 
+SIGUIENTE_COLUMNA:
+; Avanza columna de 0 a 7
+    inc COL
+    andi COL, 0x07
+    ret
+
 ; definición de figuras 
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
