@@ -1,4 +1,4 @@
-.include <m328pdef.inc>
+.include "m328pdef.inc"
 
 .def TEMP = r16  ;para operaciones temporales
 .def ZH = r30  ;puntero Z para leer tablas
@@ -36,7 +36,7 @@ RESET:
 MAIN:
   rjmp MAIN
 
-TIMER0:
+TIMER0_COMPA_vect:
   push TEMP
   push FIGURA
   push FILA
@@ -68,9 +68,9 @@ FIN_ISR:
   reti
 
 MOSTRAR_FIGURA:
-    ; función que 
-    ldi ZL, low(JUMP_TABLE<<1)
-    ldi ZH, high(JUMP_TABLE<<1)
+    ; función que cambia las tablas de figuras (usando la tabla de saltos = SALTAR)
+    ldi ZL, low(SALTAR<<1)
+    ldi ZH, high(SALTAR<<1)
     add ZL, FIGURA
     adc ZH, r1
     lpm          
@@ -81,6 +81,71 @@ MOSTRAR_FIGURA:
     ijmp
     ret
 
+SALTAR:
+; dirección de las funciones que contienen cada figura
+    .dw MOSTAR_FIG1
+    .dw MOSTAR_FIG2
+    .dw MOSTAR_FIG3
+    .dw MOSTAR_FIG4
+    .dw MOSTAR_FIG5
+
+MOSTAR_FIG1:
+; busca en la tabla el byte correspondiente a la fila actual, lo carga y envía a PORTD
+    ldi ZL, low(Cara_Feliz<<1 
+    ldi ZH, high(Cara_Feliz<<1)
+    add ZL, FILA
+    brcc CONT1
+    inc ZH
+CONT1:
+    lpm
+    out PORTD, r0
+    ret
+
+MOSTAR_FIG2:
+    ldi ZL, low(Cara_Triste<<1)
+    ldi ZH, high(Cara_Triste<<1)
+    add ZL, FILA
+    brcc CONT2
+    inc ZH
+CONT2:
+    lpm
+    out PORTD, r0
+    ret
+
+MOSTAR_FIG3:
+    ldi ZL, low(Corazon<<1)
+    ldi ZH, high(Corazon<<1)
+    add ZL, FILA
+    brcc CONT3
+    inc ZH
+CONT3:
+    lpm
+    out PORTD, r0
+    ret
+
+MOSTAR_FIG4:
+    ldi ZL, low(Rombo<<1)
+    ldi ZH, high(Rombo<<1)
+    add ZL, FILA
+    brcc CONT4
+    inc ZH
+CONT4:
+    lpm
+    out PORTD, r0
+    ret
+
+MOSTAR_FIG5:
+    ldi ZL, low(Alien<<1)
+    ldi ZH, high(Alien<<1)
+    add ZL, FILA
+    brcc CONT5
+    inc ZH
+CONT5:
+    lpm
+    out PORTD, r0
+    ret
+
+; definición de figuras 
 Cara_Feliz:
 .db 0x0, 0x24, 0x24, 0x0, 0x64, 0x3C, 0x0, 0x0
 Cara_Triste:
