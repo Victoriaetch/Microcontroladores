@@ -58,13 +58,20 @@ continue_count:
    ldi r16, 0
    rjmp count_loop
 
-
+;SUBRUTINAS
+get_7seg_code:
+	ldi r28,0x00 ;LOW(0x0100)
+	ldi r29,0x01 ;HIGH(0x0100)
+	add r28,r20
+	ld r20, Y
+	ret
 
 set_7seg_u:
+;SEGMENTOS A-F
     mov r21,r20          
     andi r21,0x3F      
     out PORTB,r21
-
+;SEGMENTO G EN PC2
     mov r21,r20          
     sbrc r21,6           
     sbi PORTC,2        
@@ -72,13 +79,6 @@ set_7seg_u:
     cbi PORTC,2         
 
     ret
-
-get_7seg_code:
-	ldi r28,0x00 ;LOW(0x0100)
-	ldi r29,0x01 ;HIGH(0x0100)
-	add r28,r20
-	ld r20, Y
-	ret
 
 guardar_codigos:
 	ldi r28, 0x00 ;LOW(0x0100)
@@ -112,7 +112,6 @@ d1: dec r23
     ret
 
 delay_2s:
-
     ldi r24, 100      ; bucle externo
 del1:
     ldi r22, 255     ; bucle medio
