@@ -1,37 +1,64 @@
+.include "m328pdef.inc"
+
 .org 0x0000
 rjmp start
 
 configurar:
-	ldi r20, 255
-	out DDRD, r20
-	ldi r20, 0xff
+	ldi r20, 0x3F
 	out DDRB, r20
-	clr r20
+
+	ldi r20, 0x04
+	out DDRC, r20
+
+	ldi r20, 0x03
 	out PORTC, r20
 	call guardar_codigos
 	ret
 
-esperar_inicio:
-	nop
-	ret
-
 start:
-  ldi r16, HIGH(RAMEND)
+   ;Stack Pointer
+    ldi r16, HIGH(RAMEND)
 	out SPH, r16
 	ldi r16, LOW(RAMEND)
 	out SPL, r16
-	call configurar
-	call esperar_inicio
-	ldi r16, 0x01
-	call get_u
-	call set_7seg_u
-	rjmp start
 
-get_u:
-	mov		r20, r16
-	andi	r20, 0x0f
-	mov		r1, r20
-	ret
+	call configurar
+
+	ldi r16, 0
+main_loop:
+   ;espera el start (un pc0)
+wait_start:
+   sbic PINC, 0
+   rjmp wait_start
+   rcall debounce
+wait_release:
+   sbis PINC, 0
+   rjmp wait_release
+   rcall debounce
+count_loop:
+   ;muestra numero actual
+   mov r20, r16
+   call get_7seg_code
+   call_set_7seg_u
+   rcall delay_2s
+
+  ;chequea stop (en pc1)
+   sbis PINC, 1
+   rjmp continue_count
+   rcall de bounce
+wait_stop:
+   sbis PINC, 1
+   rjmp wait_stop
+   rcall debounce
+   rjmp main_loop
+continue_count:
+   inc r16
+   cpi r16, 10
+   brlo count_loop
+   ldi r16, 0
+   rjmp count_loop
+
+
 
 set_7seg_u:
     mov r21,r20          
