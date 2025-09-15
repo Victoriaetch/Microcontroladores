@@ -1,0 +1,307 @@
+.include "m328pdef.inc"
+
+.def TEMP          = r16
+.def ESTADO        = r17        ; 0–4
+.def PD_ANT        = r18        ; entradas previas
+.def AN            = r19        ; entradas actuales
+.def CARGA_ELEGIDA = r20        ; 0 = ninguna, 1=PB2, 2=PB3, 3=PB4
+.def CONTADOR      = r21        ; para repetir espera 1s
+.def FLAG_PB5      = r22        ; flag para indicar si PB5 ya ejecutó su secuencia
+
+.cseg
+.org 0x0000
+    rjmp inicio
+
+; ---------------- Inicio ----------------
+inicio:
+    ; PB0–PB5 como salida
+    ldi TEMP, 0x3F
+    out DDRB, TEMP
+
+    ; PC1 como salida
+	sbi DDRC, 0
+    sbi DDRC, 1
+
+    ; LEDs iniciales: PB0 encendida (espera)
+    ldi TEMP, 0x01
+    out PORTB, TEMP
+
+    ; Variables
+    ldi ESTADO, 0
+    ldi CARGA_ELEGIDA, 0
+    ldi FLAG_PB5, 0
+
+    ; PD2–PD6 entradas con pull-up
+    cbi DDRD, 2
+    cbi DDRD, 3
+    cbi DDRD, 4
+    cbi DDRD, 5
+    cbi DDRD, 6
+    sbi PORTD, 2
+    sbi PORTD, 3
+    sbi PORTD, 4
+    sbi PORTD, 5
+    sbi PORTD, 6
+
+    ; Guardar estado inicial
+    in PD_ANT, PIND
+    andi PD_ANT, 0x7C       ; solo PD2–PD6
+
+    ; Configurar TIMER0 para el delay
+    ldi TEMP, (1<<CS02)|(1<<CS00) ; prescaler 1024
+    out TCCR0B, TEMP
+    ldi TEMP, 0
+    out TCNT0, TEMP
+
+main_loop:
+    in AN, PIND
+    andi AN, 0x7C            ; PD2–PD6
+
+; ---------------- Estado 0: espera PB0 ----------------
+    cpi ESTADO, 0
+    brne estado1
+    sbis PIND, 2             ; PD2 presionado
+    rjmp main_loop
+    sbrc PD_ANT, 2
+    rjmp main_loop
+    ldi ESTADO, 1
+    rcall actualizar_leds
+    rjmp main_loop
+
+; ---------------- Estado 1: seleccionar carga ----------------
+estado1:
+    cpi ESTADO, 1
+    brne estado2
+
+    ; Si carga aún no elegida
+    cpi CARGA_ELEGIDA, 0
+    brne main_loop  ; si ya está elegida, no hacemos nada
+
+    ; PD3 → CARGA 1
+    sbis PIND, 3
+    rjmp check_pd4
+    sbrc PD_ANT, 3
+    rjmp check_pd4
+    ldi CARGA_ELEGIDA, 1
+    rcall actualizar_leds
+    ldi ESTADO, 2        ; pasar inmediatamente a estado 2
+    rjmp main_loop
+
+check_pd4:
+    sbis PIND, 4
+    rjmp check_pd5
+    sbrc PD_ANT, 4
+    rjmp check_pd5
+    ldi CARGA_ELEGIDA, 2
+    rcall actualizar_leds
+    ldi ESTADO, 2
+    rjmp main_loop
+
+check_pd5:
+    sbis PIND, 5
+    rjmp main_loop
+    sbrc PD_ANT, 5
+    rjmp main_loop
+    ldi CARGA_ELEGIDA, 3
+    rcall actualizar_leds
+    ldi ESTADO, 2
+    rjmp main_loop
+
+; ---------------- Estado 2: encender PB5 según carga y esperar PD6 ----------------
+estado2:
+    cpi ESTADO, 2
+    brne estado3
+
+    ; --- Encender PB5 según carga ---
+    cpi CARGA_ELEGIDA, 1
+    brne carga2
+    sbi PORTB, 5
+    ldi CONTADOR, 3
+    rcall espera_multi
+    cbi PORTB, 5
+    ldi CONTADOR, 2
+    rcall espera_multi
+    rjmp espera_pd6_estado2
+
+carga2:
+    cpi CARGA_ELEGIDA, 2
+    brne carga3
+    sbi PORTB, 5
+    ldi CONTADOR, 4
+    rcall espera_multi
+    cbi PORTB, 5
+    ldi CONTADOR, 2
+    rcall espera_multi
+    rjmp espera_pd6_estado2
+
+carga3:
+    cpi CARGA_ELEGIDA, 3
+    brne espera_pd6_estado2
+    sbi PORTB, 5
+    ldi CONTADOR, 5
+    rcall espera_multi
+    cbi PORTB, 5
+    ldi CONTADOR, 3
+    rcall espera_multi
+
+; --- Espera PD6 solo para pasar al estado 3 ---
+espera_pd6_estado2:
+    sbis PIND, 6
+    rjmp espera_pd6_estado2  ; se queda aquí hasta presionar PD6
+
+    ldi ESTADO, 3
+    rcall actualizar_leds
+    rjmp main_loop
+
+
+; ---------------- Estado 3: punzonadora PC0 ----------------
+estado3:
+    cpi ESTADO, 3
+    brne estado35
+
+    ; --- Primer pulso PC0 1s ---
+    sbi PORTC, 0          ; encender PC0
+    ldi CONTADOR, 1
+    rcall espera_multi
+    cbi PORTC, 0          ; apagar PC0
+
+    ; --- Espera X según carga ---
+    cpi CARGA_ELEGIDA, 1
+    brne carga2_espera
+    ldi CONTADOR, 2        ; PD3 → 2s
+    rcall espera_multi
+    rjmp pulso2
+carga2_espera:
+    cpi CARGA_ELEGIDA, 2
+    brne carga3_espera
+    ldi CONTADOR, 3        ; PD4 → 3s
+    rcall espera_multi
+    rjmp pulso2
+carga3_espera:
+    cpi CARGA_ELEGIDA, 3
+    brne fin_espera
+    ldi CONTADOR, 4        ; PD5 → 4s
+    rcall espera_multi
+fin_espera:
+
+pulso2:
+    ; --- Segundo pulso PC0 1s ---
+    sbi PORTC, 0
+    ldi CONTADOR, 1
+    rcall espera_multi
+    cbi PORTC, 0
+
+    ; Pasar al estado 3.5
+    ldi ESTADO, 35
+    rjmp main_loop
+
+; ---------------- Estado 3.5: avance PB según carga ----------------
+estado35:
+    cpi ESTADO, 35
+    brne estado4
+
+    ; --- Encender PB correspondiente según carga ---
+    cpi CARGA_ELEGIDA, 1
+    brne carga2_avance
+    sbi PORTB, 3          ; PB3
+    ldi CONTADOR, 3        ; 3s
+    rcall espera_multi
+    cbi PORTB, 3
+    rjmp fin_estado35
+carga2_avance:
+    cpi CARGA_ELEGIDA, 2
+    brne carga3_avance
+    sbi PORTB, 4          ; PB4
+    ldi CONTADOR, 4        ; 4s
+    rcall espera_multi
+    cbi PORTB, 4
+    rjmp fin_estado35
+carga3_avance:
+    cpi CARGA_ELEGIDA, 3
+    brne fin_estado35
+    sbi PORTB, 5          ; PB5
+    ldi CONTADOR, 5        ; 5s
+    rcall espera_multi
+    cbi PORTB, 5
+
+fin_estado35:
+    ; Pasar automáticamente al Estado 4
+    ldi ESTADO, 4
+    rjmp main_loop
+
+
+
+; ---------------- Estado 4: LED final ----------------
+estado4:
+    ; Apagar PB0–PB4 y encender PC1
+    cbi PORTB, 0
+    cbi PORTB, 1
+    cbi PORTB, 2
+    cbi PORTB, 3
+    cbi PORTB, 4
+    sbi PORTC, 1
+
+    ; Esperar 5 segundos
+    ldi CONTADOR, 5
+espera_final:
+    rcall espera_1s
+    dec CONTADOR
+    brne espera_final
+
+    ; Volver al estado inicial
+    cbi PORTC, 1 
+    ldi ESTADO, 0
+    ldi CARGA_ELEGIDA, 0
+    rcall actualizar_leds
+    rjmp main_loop
+
+; ---------------- Rutinas auxiliares ----------------
+actualizar_leds:
+    cpi ESTADO, 0
+    breq leds_estado0
+    cbi PORTB, 0
+    sbi PORTB, 1
+    cpi CARGA_ELEGIDA, 1
+    brne ce2
+    sbi PORTB, 2
+    rjmp fin_leds
+ce2:
+    cpi CARGA_ELEGIDA, 2
+    brne ce3
+    sbi PORTB, 3
+    rjmp fin_leds
+ce3:
+    cpi CARGA_ELEGIDA, 3
+    brne fin_leds
+    sbi PORTB, 4
+fin_leds:
+    ret
+
+leds_estado0:
+    cbi PORTB, 1
+    cbi PORTB, 2
+    cbi PORTB, 3
+    cbi PORTB, 4
+    sbi PORTB, 0
+    ret
+
+; ---------------- Espera múltiple ----------------
+espera_multi:
+espera_multi_loop:
+    rcall espera_1s
+    dec CONTADOR
+    brne espera_multi_loop
+    ret
+
+; ---------------- Espera 1 segundo ----------------
+espera_1s:
+    ldi r17,0
+espera_loop:
+    sbis TIFR0, TOV0
+    rjmp espera_loop
+    ldi r16,(1<<TOV0)
+    out TIFR0,r16
+    inc r17
+    cpi r17, 61
+    brne espera_loop
+    ret
