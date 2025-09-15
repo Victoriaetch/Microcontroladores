@@ -203,18 +203,18 @@ estado35:
     ; --- Encender PB correspondiente según carga ---
     cpi CARGA_ELEGIDA, 1
     brne carga2_avance
-    sbi PORTB, 3          ; PB3
+    sbi PORTB, 5
     ldi CONTADOR, 3        ; 3s
     rcall espera_multi
-    cbi PORTB, 3
+    cbi PORTB, 5
     rjmp fin_estado35
 carga2_avance:
     cpi CARGA_ELEGIDA, 2
     brne carga3_avance
-    sbi PORTB, 4          ; PB4
+    sbi PORTB, 5
     ldi CONTADOR, 4        ; 4s
     rcall espera_multi
-    cbi PORTB, 4
+    cbi PORTB, 5
     rjmp fin_estado35
 carga3_avance:
     cpi CARGA_ELEGIDA, 3
