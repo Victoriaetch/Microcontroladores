@@ -54,3 +54,50 @@ int main(void) {
 
 // Código para Fast PWM:
 
+#include <avr/io.h>
+#include <util/delay.h>
+
+#define F_CPU 16000000UL
+#define TOP 255        
+#define PASOS 200      
+
+int main(void) {
+    DDRB |= (1<<PB1) | (1<<PB2); // LED1 y LED2
+
+    // Timer1 para Fast PWM 8-bit
+    TCCR1A = (1<<COM1A1) | (1<<COM1B1) | (1<<WGM11); // modo Fast PWM
+    TCCR1B = (1<<WGM13) | (1<<WGM12) | (1<<CS11); // Prescaler 8
+    ICR1 = TOP; // valor máximo del contador
+
+    uint16_t paso = 0;
+    uint8_t dir_up = 1;
+
+    // Contador para velocidad rampa
+    uint16_t contador_lento = 0;
+    const uint16_t velocidad_rampa = 500; // aumentar = más lento
+
+    while(1) {
+        contador_lento++;
+        if (contador_lento >= velocidad_rampa) {
+            contador_lento = 0;
+
+            // Calcula duty complementario
+            uint16_t dutyA = (TOP * paso) / PASOS;
+            uint16_t dutyB = (TOP * (PASOS - paso)) / PASOS;
+
+            // Asigna duty al Fast PWM
+            OCR1A = dutyA;
+            OCR1B = dutyB;
+
+            // Avanza rampa
+            if(dir_up){
+                if(++paso >= PASOS){ paso = PASOS; dir_up = 0; }
+            } else {
+                if(paso-- == 0){ paso = 0; dir_up = 1; }
+            }
+        }
+
+        _delay_ms(1); // pequeño delay para mantener bucle
+    }
+}
+
