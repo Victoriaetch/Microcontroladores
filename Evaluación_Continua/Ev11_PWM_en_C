@@ -1,0 +1,43 @@
+//  Código PWM forzado:
+// Victoria Etcheverry, Guadalupe Sosa y Sofía Modernell
+
+#include <avr/io.h>
+#include <util/delay.h>
+
+#define F_CPU 16000000UL
+#define TOP 255
+#define PASOS 200
+#define VELOCIDAD_RAMPA 100 
+
+int main(void) {
+    DDRB |= (1<<PB1) | (1<<PB2); // LED1=D9, LED2=D10
+
+    uint16_t paso = 0;
+    uint8_t dir_up = 1;
+    uint16_t contador_lento = 0;
+
+    uint16_t dutyA = 0;
+    uint16_t dutyB = TOP;
+
+    while(1) {
+        contador_lento++;
+        if(contador_lento >= VELOCIDAD_RAMPA) {
+            contador_lento = 0;
+
+            dutyA = (TOP * paso) / PASOS;
+            dutyB = (TOP * (PASOS - paso)) / PASOS;
+
+            if(dir_up){
+                if(++paso >= PASOS){ paso = PASOS; dir_up = 0; }
+            } else {
+                if(paso-- == 0){ paso = 0; dir_up = 1; }
+            }
+        }
+
+        for(uint16_t cnt=0; cnt<=TOP; cnt++){
+            if(cnt < dutyA) PORTB |= (1<<PB1); else PORTB &= ~(1<<PB1);
+            if(cnt < dutyB) PORTB |= (1<<PB2); else PORTB &= ~(1<<PB2);
+            _delay_us(1); // mantiene PWM rápida
+        }
+    }
+}
