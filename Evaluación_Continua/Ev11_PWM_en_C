@@ -1,20 +1,22 @@
 //  Código PWM forzado:
 // Victoria Etcheverry, Guadalupe Sosa y Sofía Modernell
 
+// Librerias utilizadas 
 #include <avr/io.h>
 #include <util/delay.h>
 
-#define F_CPU 16000000UL
-#define TOP 255
-#define PASOS 200
-#define VELOCIDAD_RAMPA 100 
+// Definiciones
+#define F_CPU 16000000UL // Frecuencia 
+#define TOP 255 // Valor máximo para PWM 
+#define PASOS 200 // Número de pasos para la rampa (brillo)
+#define VELOCIDAD_RAMPA 100 // Controla la velocidad de la rampa (brillo)
 
 int main(void) {
     DDRB |= (1<<PB1) | (1<<PB2); // LED1=D9, LED2=D10
 
-    uint16_t paso = 0;
-    uint8_t dir_up = 1;
-    uint16_t contador_lento = 0;
+    uint16_t paso = 0; // Controla los pasos de la rampa
+    uint8_t dir_up = 1; // dirección: 1= ascendente, 0= descendnete
+    uint16_t contador_lento = 0; // relentiza
 
     uint16_t dutyA = 0;
     uint16_t dutyB = TOP;
@@ -24,20 +26,31 @@ int main(void) {
         if(contador_lento >= VELOCIDAD_RAMPA) {
             contador_lento = 0;
 
+            // duty proporcional al paso actual
             dutyA = (TOP * paso) / PASOS;
             dutyB = (TOP * (PASOS - paso)) / PASOS;
 
+            // Actualiza el paso de la rampa según la dirección 
             if(dir_up){
                 if(++paso >= PASOS){ paso = PASOS; dir_up = 0; }
             } else {
-                if(paso-- == 0){ paso = 0; dir_up = 1; }
+                if(paso-- == 0){ 
+                    paso = 0; 
+                    dir_up = 1; }
+            // si llega al final limita el paso y cambia de dirección 
             }
         }
 
+        // PWM frozado rápido 
         for(uint16_t cnt=0; cnt<=TOP; cnt++){
+            // LED1: encendido si cnt < dutyA, apagado si cnt >= dutyA 
             if(cnt < dutyA) PORTB |= (1<<PB1); else PORTB &= ~(1<<PB1);
+            // LED2: encendido si cnt < dutyB, apagado si cnt >= dutyB
             if(cnt < dutyB) PORTB |= (1<<PB2); else PORTB &= ~(1<<PB2);
             _delay_us(1); // mantiene PWM rápida
         }
     }
 }
+
+// Código para Fast PWM:
+
