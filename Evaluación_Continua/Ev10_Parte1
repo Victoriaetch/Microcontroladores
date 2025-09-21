@@ -10,7 +10,7 @@ uint16_t tiempo_retardo = 500; // Retardo inicial en ms
 // Secuencias de LEDs
 uint8_t leds_desplazamiento[] = {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
 uint8_t leds_secuenciales[]  = {0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF};
-uint8_t leds_extremos[]       = {0x81,0x42,0x24,0x18,0x18,0x24,0x42,0x81};
+uint8_t leds_extremos[]       = {0x81,0xC3,0xE7,0xFF,0xFF,0xE7,0xC3,0x81};
 
 // Función de retardo usando variable
 void retardo_ms(uint16_t ms) {
@@ -34,11 +34,19 @@ void revisar_botones() {
 }
 
 // Muestra una secuencia de LEDs
-void mostrar_secuencia(uint8_t *secuencia) {
+void mostrar_secuencia(uint8_t *secuencia, uint8_t largo){
     for(uint8_t i=0; i<8; i++) {
         PORTB = secuencia[i];         // Enciende LEDs según secuencia
         retardo_ms(tiempo_retardo);   // Retardo
         revisar_botones();             // Ajusta velocidad si se presionan botones
+    }
+}
+
+void mostrar_extremos(uint8_t *secuencia, uint8_t largo) {
+    for(uint8_t i=0; i<largo; i++) {
+        PORTB = secuencia[i];
+        retardo_ms(tiempo_retardo);
+        revisar_botones();
     }
 }
 
@@ -47,8 +55,8 @@ int main(void) {
     DDRD &= ~((1<<BOTON_MAS_RAPIDO)|(1<<BOTON_MAS_LENTO)); // Configurar botones como entrada
 
     while(1) {
-        mostrar_secuencia(leds_desplazamiento);
-        mostrar_secuencia(leds_secuenciales);
-        mostrar_secuencia(leds_extremos);
+        mostrar_secuencia(leds_desplazamiento, sizeof(leds_desplazamiento)/sizeof(leds_desplazamiento[0]));
+        mostrar_secuencia(leds_secuenciales, sizeof(leds_secuenciales)/sizeof(leds_secuenciales[0]));
+        mostrar_extremos(leds_extremos, sizeof(leds_extremos)/sizeof(leds_extremos[0]));;
     }
 }
