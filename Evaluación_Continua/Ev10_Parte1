@@ -1,2 +1,54 @@
+#include <avr/io.h>
+#include <util/delay.h>
 
+// Pines de botones
+#define BOTON_MAS_RAPIDO  PD2
+#define BOTON_MAS_LENTO   PD3
 
+uint16_t tiempo_retardo = 500; // Retardo inicial en ms
+
+// Secuencias de LEDs
+uint8_t leds_desplazamiento[] = {0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80};
+uint8_t leds_secuenciales[]  = {0x01,0x03,0x07,0x0F,0x1F,0x3F,0x7F,0xFF};
+uint8_t leds_extremos[]       = {0x81,0x42,0x24,0x18,0x18,0x24,0x42,0x81};
+
+// Función de retardo usando variable
+void retardo_ms(uint16_t ms) {
+    for(uint16_t i=0; i<ms; i++) {
+        _delay_us(1000); // 1 ms
+    }
+}
+
+// Función para comprobar botones y ajustar velocidad
+void revisar_botones() {
+    // Botón más rápido
+    if (!(PIND & (1<<BOTON_MAS_RAPIDO))) {
+        if (tiempo_retardo > 50) tiempo_retardo -= 50;
+        _delay_ms(50); // antirrebote
+    }
+    // Botón más lento
+    if (!(PIND & (1<<BOTON_MAS_LENTO))) {
+        if (tiempo_retardo < 2000) tiempo_retardo += 50;
+        _delay_ms(50); // antirrebote
+    }
+}
+
+// Muestra una secuencia de LEDs
+void mostrar_secuencia(uint8_t *secuencia) {
+    for(uint8_t i=0; i<8; i++) {
+        PORTB = secuencia[i];         // Enciende LEDs según secuencia
+        retardo_ms(tiempo_retardo);   // Retardo
+        revisar_botones();             // Ajusta velocidad si se presionan botones
+    }
+}
+
+int main(void) {
+    DDRB = 0xFF; // Configurar LEDs como salida
+    DDRD &= ~((1<<BOTON_MAS_RAPIDO)|(1<<BOTON_MAS_LENTO)); // Configurar botones como entrada
+
+    while(1) {
+        mostrar_secuencia(leds_desplazamiento);
+        mostrar_secuencia(leds_secuenciales);
+        mostrar_secuencia(leds_extremos);
+    }
+}
