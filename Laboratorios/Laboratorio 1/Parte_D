@@ -70,4 +70,34 @@ USART_Init:
     sts UCSR0C, temp
     ret
 
+; INTERRUPCIÓN DE RECEPCIÓN SERIAL 
+USART_RXC:
+    ; Guardar registros
+    push temp
+    in temp, SREG
+    push temp
+
+    ; Leer dato recibido
+    lds comando, UDR0
+
+    ; Procesar comando
+    cpi comando, '1'
+    breq DIBUJAR_TRIANGULO
+    cpi comando, '2'
+    breq DIBUJAR_CIRCULO
+    cpi comando, '3'
+    breq DIBUJAR_CRUZ
+    cpi comando, 'T'
+    breq DIBUJAR_TODOS
+    cpi comando, 't'
+    breq DIBUJAR_TODOS
+
+    ; Restaurar registros y retornar
+USART_RXC_END:
+    pop temp
+    out SREG, temp
+    pop temp
+    reti
+
+
 
