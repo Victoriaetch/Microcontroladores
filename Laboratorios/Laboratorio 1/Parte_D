@@ -99,5 +99,27 @@ USART_RXC_END:
     pop temp
     reti
 
+;FUNCIONES DE DIBUJOS
+
+DIBUJAR_TRIANGULO:
+    call TRIANGULO
+    rjmp USART_RXC_END
+
+DIBUJAR_CIRCULO:
+    call CIRCULO
+    rjmp USART_RXC_END
+
+DIBUJAR_CRUZ:
+    call CRUZ
+    rjmp USART_RXC_END
+
+DIBUJAR_TODOS:
+    call TRIANGULO
+    call DELAY_LARGO_FUNC
+    call CRUZ
+    call DELAY_LARGO_FUNC
+    call CIRCULO
+    rjmp USART_RXC_END
+
 
 
