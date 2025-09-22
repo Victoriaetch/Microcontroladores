@@ -28,3 +28,27 @@
     jmp RESET
 .org URXCaddr
     jmp USART_RXC
+
+RESET:
+    ; Inicia stack pointer
+    ldi temp, high(RAMEND)
+    out SPH, temp
+    ldi temp, low(RAMEND)
+    out SPL, temp
+
+    ; Configurar puerto D como salida
+    ldi temp, MASK_CONTROL
+    out DDRD, temp
+    ldi temp, 0x00
+    out PORTD, temp
+
+    ; Inicia comunicación serial
+    call USART_Init
+
+    ; Habilitar interrupciones globales
+    sei
+
+    ; Posición inicial
+    call RESET_POSITION
+
+
