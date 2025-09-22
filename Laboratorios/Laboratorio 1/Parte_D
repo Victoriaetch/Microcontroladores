@@ -121,5 +121,70 @@ DIBUJAR_TODOS:
     call CIRCULO
     rjmp USART_RXC_END
 
+RESET_POSITION:
+    ; Guardar registros
+    push temp
+    push temp2
+
+    ; Primero: mover hacia arriba hasta tocar el límite superior
+    call MOVER_ARRIBA_HASTA_LIMITE
+    
+    ; Segundo: mover hacia derecha hasta tocar el límite derecho  
+    call MOVER_DERECHA_HASTA_LIMITE
+    
+    ; estamos en la posición inicial (superior derecha)
+    ; Esta posición se considera (0,0) para nuestros dibujos
+    
+    ; Restaurar registros
+    pop temp2
+    pop temp
+    ret
+
+MOVER_ARRIBA_HASTA_LIMITE:
+    ; Leer sensor de límite superior (asumiendo que está en PINB0)
+    in temp, PINB
+    andi temp, (1<<PB0)
+    
+    ; Si ya estamos en el límite, salir
+    brne MOVER_ARRIBA_HASTA_LIMITE_END
+    
+    ; Mover hacia arriba continuamente
+MOVER_ARRIBA_LOOP:
+    sbi PORTD, MOV_ARRIBA
+    call DELAY_CORTO_FUNC
+    
+    ; Verificar sensor
+    in temp, PINB
+    andi temp, (1<<PB0)
+    breq MOVER_ARRIBA_LOOP  ; Continuar si no se ha alcanzado el límite
+    
+    ; Detener movimiento
+MOVER_ARRIBA_HASTA_LIMITE_END:
+    cbi PORTD, MOV_ARRIBA
+    ret
+
+MOVER_DERECHA_HASTA_LIMITE:
+    ; Leer sensor de límite derecho (asumiendo que está en PINB1)
+    in temp, PINB
+    andi temp, (1<<PB1)
+    
+    ; Si ya estamos en el límite, salir
+    brne MOVER_DERECHA_HASTA_LIMITE_END
+    
+    ; Mover hacia derecha continuamente
+MOVER_DERECHA_LOOP:
+    sbi PORTD, MOV_DERECHA
+    call DELAY_CORTO_FUNC
+    
+    ; Verificar sensor
+    in temp, PINB
+    andi temp, (1<<PB1)
+    breq MOVER_DERECHA_LOOP  ; Continuar si no se ha alcanzado el límite
+    
+    ; Detener movimiento
+MOVER_DERECHA_HASTA_LIMITE_END:
+    cbi PORTD, MOV_DERECHA
+    ret
+
 
 
