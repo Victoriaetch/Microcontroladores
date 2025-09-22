@@ -186,5 +186,136 @@ MOVER_DERECHA_HASTA_LIMITE_END:
     cbi PORTD, MOV_DERECHA
     ret
 
+TRIANGULO:
+    ; Activar solenoide (bajar lápiz)
+    sbi PORTD, BAJA_SOLENOIDE
+    call DELAY_CORTO_FUNC
+
+    ; Dibujar triángulo
+    call MOVER_DERECHA_LARGO
+    call MOVER_ABAJO_LARGO
+    call MOVER_IZQUIERDA_LARGO
+    call MOVER_ARRIBA_LARGO
+
+    ; Levantar lápiz
+    cbi PORTD, BAJA_SOLENOIDE
+    sbi PORTD, SUBIR_SOLENOIDE
+    call DELAY_CORTO_FUNC
+    cbi PORTD, SUBIR_SOLENOIDE
+    ret
+
+CRUZ:
+    ; Activar solenoide (bajar lápiz)
+    sbi PORTD, BAJA_SOLENOIDE
+    call DELAY_CORTO_FUNC
+
+    ; Dibujar cruz
+    call MOVER_ABAJO_MEDIO
+    call MOVER_ARRIBA_MEDIO
+    call MOVER_DERECHA_MEDIO
+    call MOVER_IZQUIERDA_MEDIO
+
+    ; Levantar lápiz
+    cbi PORTD, BAJA_SOLENOIDE
+    sbi PORTD, SUBIR_SOLENOIDE
+    call DELAY_CORTO_FUNC
+    cbi PORTD, SUBIR_SOLENOIDE
+    ret
+
+; CÍRCULO (APROXIMACIÓN) 
+CIRCULO:
+    ; Activar solenoide (bajar lápiz)
+    sbi PORTD, BAJA_SOLENOIDE
+    call DELAY_CORTO_FUNC
+
+    ; Dibujar círculo (aproximación con 8 segmentos)
+    ldi contador, 8
+CIRCULO_LOOP:
+    call MOVER_DERECHA_CORTO
+    call MOVER_ABAJO_CORTO
+    call MOVER_IZQUIERDA_CORTO
+    call MOVER_ARRIBA_CORTO
+    dec contador
+    brne CIRCULO_LOOP
+
+    ; Levantar lápiz
+    cbi PORTD, BAJA_SOLENOIDE
+    sbi PORTD, SUBIR_SOLENOIDE
+    call DELAY_CORTO_FUNC
+    cbi PORTD, SUBIR_SOLENOIDE
+    ret
+
+; FUNCIONES DE MOVIMIENTO 
+MOVER_DERECHA_CORTO:
+    sbi PORTD, MOV_DERECHA
+    call DELAY_CORTO_FUNC
+    cbi PORTD, MOV_DERECHA
+    ret
+
+MOVER_IZQUIERDA_CORTO:
+    sbi PORTD, MOV_IZQUIERDA
+    call DELAY_CORTO_FUNC
+    cbi PORTD, MOV_IZQUIERDA
+    ret
+
+MOVER_ARRIBA_CORTO:
+    sbi PORTD, MOV_ARRIBA
+    call DELAY_CORTO_FUNC
+    cbi PORTD, MOV_ARRIBA
+    ret
+
+MOVER_ABAJO_CORTO:
+    sbi PORTD, MOV_ABAJO
+    call DELAY_CORTO_FUNC
+    cbi PORTD, MOV_ABAJO
+    ret
+
+MOVER_DERECHA_MEDIO:
+    sbi PORTD, MOV_DERECHA
+    call DELAY_MEDIO_FUNC
+    cbi PORTD, MOV_DERECHA
+    ret
+
+MOVER_IZQUIERDA_MEDIO:
+    sbi PORTD, MOV_IZQUIERDA
+    call DELAY_MEDIO_FUNC
+    cbi PORTD, MOV_IZQUIERDA
+    ret
+
+MOVER_ARRIBA_MEDIO:
+    sbi PORTD, MOV_ARRIBA
+    call DELAY_MEDIO_FUNC
+    cbi PORTD, MOV_ARRIBA
+    ret
+
+MOVER_ABAJO_MEDIO:
+    sbi PORTD, MOV_ABAJO
+    call DELAY_MEDIO_FUNC
+    cbi PORTD, MOV_ABAJO
+    ret
+
+MOVER_DERECHA_LARGO:
+    sbi PORTD, MOV_DERECHA
+    call DELAY_LARGO_FUNC
+    cbi PORTD, MOV_DERECHA
+    ret
+
+MOVER_IZQUIERDA_LARGO:
+    sbi PORTD, MOV_IZQUIERDA
+    call DELAY_LARGO_FUNC
+    cbi PORTD, MOV_IZQUIERDA
+    ret
+
+MOVER_ARRIBA_LARGO:
+    sbi PORTD, MOV_ARRIBA
+    call DELAY_LARGO_FUNC
+    cbi PORTD, MOV_ARRIBA
+    ret
+
+MOVER_ABAJO_LARGO:
+    sbi PORTD, MOV_ABAJO
+    call DELAY_LARGO_FUNC
+    cbi PORTD, MOV_ABAJO
+    ret
 
 
