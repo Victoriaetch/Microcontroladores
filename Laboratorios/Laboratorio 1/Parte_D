@@ -51,4 +51,23 @@ RESET:
     ; Posición inicial
     call RESET_POSITION
 
+MAIN_LOOP:
+    rjmp MAIN_LOOP
+
+USART_Init:
+    ; Configurar baudios
+    ldi temp, high(UBRR_VAL)
+    sts UBRR0H, temp
+    ldi temp, low(UBRR_VAL)
+    sts UBRR0L, temp
+
+    ; Habilitar receptor e interrupción de recepción
+    ldi temp, (1<<RXEN0)|(1<<RXCIE0)
+    sts UCSR0B, temp
+
+    ; Configurar formato: 8 bits, 1 stop bit, sin paridad
+    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
+    sts UCSR0C, temp
+    ret
+
 
