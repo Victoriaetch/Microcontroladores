@@ -6,6 +6,13 @@ const uint8_t columnas[8] = {2,3,4,5,6,7,8,9};
 // Filas F1–F8 → D10–D13, A0–A3
 const uint8_t filas[8] = {10,11,12,13,A0,A1,A2,A3};
 
+// Pines de pulsadores
+#define BOTON_MAS_RAPIDO  A4
+#define BOTON_MAS_LENTO   A5
+
+// Retardo base (en ms)
+uint16_t tiempo_retardo = 200;
+
 // Función de retardo variable
 void retardo_ms(uint16_t ms) {
   for(uint16_t i=0; i<ms; i++){
@@ -14,11 +21,11 @@ void retardo_ms(uint16_t ms) {
 }
 
 // Figuras 8x8
-uint8_t cara_feliz[8] = {0x00,0x24,0x24,0x00,0x64,0x3C,0x00,0x00};
+uint8_t cara_feliz[8]  = {0x00,0x24,0x24,0x00,0x64,0x3C,0x00,0x00};
 uint8_t cara_triste[8] = {0x00,0x24,0x24,0x00,0x3C,0x64,0x00,0x00};
-uint8_t corazon[8] = {0x00,0x66,0xFF,0xFF,0x7E,0x3C,0x18,0x00};
-uint8_t rombo[8] = {0x18,0x3C,0x7E,0xFF,0xFF,0x7E,0x3C,0x18};
-uint8_t alien[8] = {0x18,0x3C,0x7E,0xDB,0xFF,0x5A,0x81,0x42};
+uint8_t corazon[8]     = {0x00,0x66,0xFF,0xFF,0x7E,0x3C,0x18,0x00};
+uint8_t rombo[8]       = {0x18,0x3C,0x7E,0xFF,0xFF,0x7E,0x3C,0x18};
+uint8_t alien[8]       = {0x18,0x3C,0x7E,0xDB,0xFF,0x5A,0x81,0x42};
 
 // Enciende la matriz según la figura
 void mostrar_figura(uint8_t figura[8], uint16_t tiempo_retardo){
@@ -31,7 +38,7 @@ void mostrar_figura(uint8_t figura[8], uint16_t tiempo_retardo){
 
     // Encender columnas según bits
     for(uint8_t col=0; col<8; col++){
-      if(figura[fila] & (1<<col)) digitalWrite(columnas[col], LOW); // Común ánodo
+      if(figura[fila] & (1<<col)) digitalWrite(columnas[col], LOW); // común ánodo
       else digitalWrite(columnas[col], HIGH);
     }
 
@@ -47,13 +54,28 @@ void setup(){
     digitalWrite(filas[i], LOW);
     digitalWrite(columnas[i], HIGH); // columna apagada
   }
+
+  // Configurar pulsadores como entrada con pull-up
+  pinMode(BOTON_MAS_RAPIDO, INPUT_PULLUP);
+  pinMode(BOTON_MAS_LENTO, INPUT_PULLUP);
 }
 
 void loop(){
-  mostrar_figura(cara_feliz, 200);
-  mostrar_figura(cara_triste, 200);
-  mostrar_figura(corazon, 200);
-  mostrar_figura(rombo, 200);
-  mostrar_figura(alien, 200);
+  // Leer pulsadores
+  if(digitalRead(BOTON_MAS_RAPIDO) == LOW){
+    if(tiempo_retardo > 50) tiempo_retardo -= 20; // acelera
+    delay(200); // antirrebote
+  }
+  if(digitalRead(BOTON_MAS_LENTO) == LOW){
+    if(tiempo_retardo < 1000) tiempo_retardo += 20; // frena
+    delay(200); // antirrebote
+  }
+
+  // Mostrar las figuras con el retardo ajustado
+  mostrar_figura(cara_feliz, tiempo_retardo);
+  mostrar_figura(cara_triste, tiempo_retardo);
+  mostrar_figura(corazon, tiempo_retardo);
+  mostrar_figura(rombo, tiempo_retardo);
+  mostrar_figura(alien, tiempo_retardo);
 }
 
