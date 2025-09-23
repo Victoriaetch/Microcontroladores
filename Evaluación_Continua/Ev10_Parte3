@@ -6,10 +6,11 @@ const uint8_t columnas[8] = {2,3,4,5,6,7,8,9};
 // Pines de filas F1–F8 → D10–D13, A0–A3
 const uint8_t filas[8] = {10,11,12,13,A0,A1,A2,A3};
 
-// Botones
-#define BOTON_SIGUIENTE 2
-#define BOTON_MAS_RAPIDO 3
-#define BOTON_MAS_LENTO 4
+// Botones (pines libres en UNO)
+#define BOTON_SIGUIENTE   0
+#define BOTON_ANTERIOR    1   // Nuevo botón para ir hacia atrás
+#define BOTON_MAS_RAPIDO  A4
+#define BOTON_MAS_LENTO   A5
 
 uint16_t tiempo_retardo = 200; // ms
 
@@ -27,23 +28,16 @@ uint8_t letras[][8] = {
     {0x7F,0x01,0x01,0x01,0x7F,0x00,0x00,0x00}  // O
 };
 
-// Retardo variable
 void retardo_ms(uint16_t ms){
   for(uint16_t i=0;i<ms;i++) delayMicroseconds(1000);
 }
 
-// Muestra una letra en la matriz
 void mostrar_letra(uint8_t indice){
   for(uint8_t fila=0; fila<8; fila++){
-    // Apagar todas las filas
     for(uint8_t r=0;r<8;r++) digitalWrite(filas[r], LOW);
-
-    // Activar fila actual
     digitalWrite(filas[fila], HIGH);
-
-    // Encender columnas según bits
     for(uint8_t col=0; col<8; col++){
-      if(letras[indice][fila] & (1<<col)) digitalWrite(columnas[col], LOW); // Común ánodo
+      if(letras[indice][fila] & (1<<col)) digitalWrite(columnas[col], LOW); 
       else digitalWrite(columnas[col], HIGH);
     }
     retardo_ms(tiempo_retardo/4);
@@ -51,7 +45,6 @@ void mostrar_letra(uint8_t indice){
 }
 
 void setup(){
-  // Configurar filas y columnas como salida
   for(uint8_t i=0;i<8;i++){
     pinMode(filas[i], OUTPUT);
     pinMode(columnas[i], OUTPUT);
@@ -59,31 +52,41 @@ void setup(){
     digitalWrite(columnas[i], HIGH);
   }
 
-  // Botones como entrada con pull-up
   pinMode(BOTON_SIGUIENTE, INPUT_PULLUP);
+  pinMode(BOTON_ANTERIOR, INPUT_PULLUP);
   pinMode(BOTON_MAS_RAPIDO, INPUT_PULLUP);
   pinMode(BOTON_MAS_LENTO, INPUT_PULLUP);
 }
 
 void loop(){
-  static uint8_t indice_letra = 0;
+  static int8_t indice_letra = 0;
   uint8_t largo_mensaje = sizeof(letras)/sizeof(letras[0]);
 
+  // Avanzar
   if(digitalRead(BOTON_SIGUIENTE) == LOW){
     mostrar_letra(indice_letra);
     indice_letra++;
     if(indice_letra >= largo_mensaje) indice_letra=0;
-    delay(200); // antirrebote
+    delay(200); 
   }
 
+  // Retroceder
+  if(digitalRead(BOTON_ANTERIOR) == LOW){
+    mostrar_letra(indice_letra);
+    indice_letra--;
+    if(indice_letra < 0) indice_letra = largo_mensaje-1;
+    delay(200); 
+  }
+
+  // Más rápido
   if(digitalRead(BOTON_MAS_RAPIDO) == LOW){
     if(tiempo_retardo>50) tiempo_retardo -= 50;
     delay(50);
   }
 
+  // Más lento
   if(digitalRead(BOTON_MAS_LENTO) == LOW){
     if(tiempo_retardo<2000) tiempo_retardo += 50;
     delay(50);
   }
 }
-
