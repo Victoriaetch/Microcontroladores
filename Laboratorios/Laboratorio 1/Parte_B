@@ -1,6 +1,6 @@
 .include "m328pdef.inc"
 
-.equ ANCHO_MSG = 45         ; total columnas del mensaje (HOLIS con separadores)
+.equ ANCHO_MSG = 136         ; total columnas del mensaje (HOLIS con separadores)
 .equ FRAME_STEP = 80        ; frames por paso de scroll (ajustar velocidad)
 
 .equ F_CPU = 16000000
@@ -19,17 +19,51 @@
 .def ancho     = r28
 .def mask      = r29       ; máscara temporal para extraer bit por fila
 
+.def opcion_actual = r16
+.def temp          = r17
+.def op_temp = r18
+
 .cseg
 .org 0x0000
     rjmp inicio
 
 colbuf:
-    .db 0b00000000, 0b00000000, 0b11111110, 0b00010000, 0b00010000, 0b00010000, 0b11111110, 0b00000000
-    .db 0b00000000, 0b01111100, 0b10000010, 0b10000010, 0b10000010, 0b10000010, 0b01111100, 0b00000000
-    .db 0b00000000, 0b00000000, 0b11111110, 0b00000010, 0b00000010, 0b00000010, 0b00000010, 0b00000000
-    .db 0b00000000, 0b00000000, 0b10000010, 0b10000010, 0b11111110, 0b10000010, 0b10000010, 0b00000000
-    .db 0b00000000, 0b00000000, 0b01100100, 0b10010010, 0b10010010, 0b10010010, 0b01001100, 0b00000000
-    .db 0b00000000    ; (posible columna extra para separación final)
+.db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
+ ;p
+.db  0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b00110000, 0b00000000, 0b00000000
+;o
+.db 0b00000000, 0b00111110, 0b01000001, 0b01000001, 0b01000001, 0b01000001, 0b00111110, 0b00000000
+;w
+.db 0b00000000, 0b01111111, 0b00000001, 0b00000010, 0b00000100, 0b00000010, 0b01111111, 0b00000000
+;e
+.db 0b00000000, 0b00000000, 0b01111111, 0b01001001, 0b01001001, 0b01000001, 0b00000000, 0b00000000
+;r
+.db 0b00000000, 0b01111111, 0b01001000, 0b01001100, 0b01001010, 0b00110001, 0b00000000, 0b00000000
+;p
+.db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b00110000, 0b00000000, 0b00000000
+;u
+.db 0b00000000, 0b01111110, 0b00000001, 0b00000001, 0b00000001, 0b00000001, 0b01111110, 0b00000000
+;f
+.db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b01000000, 0b00000000, 0b00000000
+;f
+.db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b01000000, 0b00000000, 0b00000000
+
+;espacio
+.db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
+
+;g
+.db 0b00000000, 0b00111110, 0b01001001, 0b01001001, 0b01001001, 0b00100110, 0b00000000, 0b00000000
+;i
+.db 0b00000000, 0b00000000, 0b01000001, 0b01000001, 0b01111111, 0b01000001, 0b01000001, 0b00000000
+;r
+.db 0b00000000, 0b01111111, 0b01001000, 0b01001100, 0b01001010, 0b00110001, 0b00000000, 0b00000000
+;l
+.db 0b00000000, 0b01111111, 0b00000001, 0b00000001, 0b00000001, 0b00000001, 0b00000000, 0b00000000
+;s
+.db 0b00000000, 0b00000000, 0b00110010, 0b01001001, 0b01001001, 0b01001001, 0b00100110, 0b00000000
+
+;espacio
+.db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
 
 Cara_Feliz:
     .db 0x00, 0x24, 0x24, 0x00, 0x64, 0x3C, 0x00, 0x00
@@ -39,25 +73,20 @@ Corazon:
 
 ; ===================== Strings para UART =====================
 WelcomeMsg:
-    .db "Bienvenido a la matriz LED",0x00
+    .db "Bienvenido a la matriz LED",0x0D, 0x0A, 0
 
 MenuMsg:
-    .db "Seleccione una opcion:",0x00
+    .db "Seleccione una opcion:",0x0D, 0x0A, 0
 
 MenuOpciones:
-    .db "1: Mensaje desplazante",0x00
-    .db "2: Figura 1",0x00
-    .db "3: Figura 2",0x00
+    .db "1: Mensaje desplazante 2: Carita Feliz 3: Corazon" 0x0D, 0x0A, 0
 ; =================== Inicio ===================
 inicio:
-	rcall initUART
     ; Stack
     ldi  r16, high(RAMEND)
     out  SPH, r16
     ldi  r16, low(RAMEND)
     out  SPL, r16
-
-    clr  r0                ; r0 = 0 (usa como cero cuando hagas adc)
 
     ldi  r16, 0xFC           ; DDRD: PD7..PD2 como salidas (filas), PD0/PD1 libres
     out  DDRD, r16
@@ -78,37 +107,275 @@ inicio:
     clr offset
     clr framecnt
     ldi ancho, ANCHO_MSG
+; UART
+    ldi temp, high(UBRR_VALUE)
+    sts UBRR0H, temp
+    ldi temp, low(UBRR_VALUE)
+    sts UBRR0L, temp
+    ldi temp, (1<<RXEN0)|(1<<TXEN0)
+    sts UCSR0B, temp
+    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
+    sts UCSR0C, temp
 
-main:
+    ; GPIO
+    ldi temp, 0xFF
+    out DDRB, temp      ; puerto B salida (LEDs test)
 
-    rcall MostrarMenu
-    rcall EjecutarOpcion
-    rjmp main
+    clr opcion_actual
+
+    ; Mostrar menú inicial
+	    rcall MostrarMenu
+
+	 ldi r16,0xFC
+    out DDRD,r16
+    ldi r16,0x3F
+    out DDRB,r16
+    ldi r16,0x3C
+    out DDRC,r16
+
+    ; Poner todos los pines en HIGH (apagado)
+    ldi r16,0xFF
+    out PORTD,r16
+    out PORTB,r16
+    out PORTC,r16
+
+    ; Apagar columnas y filas explícitamente
+    rcall apagar_filas
+    rcall apagar_columnas
+	
+	; Inicializar variables
+    clr offset
+    clr framecnt
+    ldi ancho,ANCHO_MSG
+    clr columnas
+    clr fila
+    ldi mask,0b10000000
+
+    ; Retardo inicial para asegurar LEDs apagados
+    ldi r16,0xFF
+
+main_loop:
+	rcall UART_CheckReceive
+
+    cpi opcion_actual,1
+    breq scroll
+    cpi opcion_actual,2
+    breq cara
+    cpi opcion_actual,3
+    breq corazon
+
+    rjmp main_loop
+
+scroll:
+scroll_loop:
+    rcall UART_CheckReceive   ; revisar si cambió la opción
+
+    cpi opcion_actual, 2
+    breq main_loop            ; si es 2, salir al main
+    cpi opcion_actual, 3
+    breq main_loop            ; si es 3, salir al main
+    rcall multiplexar_una_vez
+inc framecnt
+cpi framecnt, 150
+brlo skip_offset
+clr framecnt
+inc offset
+cpi offset,(ANCHO_MSG-7)
+brlo skip_offset
+clr offset
+skip_offset:
+    rjmp scroll_loop
+
+cara:
+cara_loop:
+    rcall UART_CheckReceive
+    cpi opcion_actual,1
+    breq main_loop
+    cpi opcion_actual,3
+    breq main_loop
+
+    rcall mostrar_carita
+    rjmp cara_loop
+
+corazon:
+cor_loop:
+    rcall UART_CheckReceive
+    cpi opcion_actual,1
+    breq main_loop
+    cpi opcion_actual,2
+    breq main_loop
+
+    rcall mostrar_corazon
+    rjmp cor_loop
+
+mostrar_carita:
+    ; Columna 0
+    ldi columnas, 0x3C
+    ldi fila, 0
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 1
+    ldi columnas, 0x42
+    ldi fila, 1
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 2
+    ldi columnas, 0xA5
+    ldi fila, 2
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 3
+    ldi columnas, 0x81
+    ldi fila, 3
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 4
+    ldi columnas, 0xA5
+    ldi fila, 4
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 5
+    ldi columnas, 0x99
+    ldi fila, 5
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 6
+    ldi columnas, 0x42
+    ldi fila, 6
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+    ; Columna 7
+    ldi columnas, 0x3C
+    ldi fila, 7
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ret
+mostrar_corazon:
+    ; Columna 0
+    ldi columnas, 0x00
+    ldi fila, 0
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 1
+    ldi columnas, 0x66
+    ldi fila, 1
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 2
+    ldi columnas, 0xFF
+    ldi fila, 2
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 3
+    ldi columnas, 0xFF
+    ldi fila, 3
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+ 	; Columna 4
+    ldi columnas, 0x7E
+    ldi fila, 4
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 5
+    ldi columnas, 0x3C
+    ldi fila, 5
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 6
+    ldi columnas, 0x18
+    ldi fila, 6
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ; Columna 7
+    ldi columnas, 0x00
+    ldi fila, 7
+    rcall cargar_columnas
+    rcall seleccionar_fila
+    rcall retardo_fila
+    rcall apagar_filas
+    rcall apagar_columnas
+
+    ret
 
 multiplexar_una_vez:
-    ldi fila, 0
-    ldi mask, 0b10000000    ; máscara para extraer bit de la columna según la fila (bit7->fila0)
+    ldi fila,0
+    ldi mask,0b10000000
 sig_fila:
-    ; Z = address colbuf
     ldi ZH, high(colbuf)
     ldi ZL, low(colbuf)
-    ; sumamos offset (en r26)
     mov r16, offset
-    add ZL, r16
+    add ZL,r16
     clr r16
-    adc ZH, r16
+    adc ZH,r16
 
-    clr columnas             ; acumulador para la fila actual
-    ldi r19, 8                ; contador 8 columnas a leer
-
+    clr columnas
+    ldi r19,8
 col_loop:
-    lpm r18, Z+               ; c = colbuf[offset + k]   (c = r18)
-    lsl columnas            ; shift left el acumulador
-    ; si (c & mask) != 0 -> poner LSB a 1
-    mov r16, r18
-    and r16, mask
+    lpm r18,Z+
+    lsl columnas
+    mov r16,r18
+    and r16,mask
     breq no_setbit
-    ori columnas, 0x01
+    ori columnas,0x01
 no_setbit:
     dec r19
     brne col_loop
@@ -120,8 +387,8 @@ no_setbit:
     rcall apagar_columnas
 
     inc fila
-    lsr mask               ; siguiente fila -> bit inferior en la columna
-    cpi fila, 8
+    lsr mask
+    cpi fila,8
     brlo sig_fila
     ret
 
@@ -161,7 +428,7 @@ cargar_columnas:
     lsl  r18
     or   r17, r18
 
-    or   r16, r17
+     or   r16, r17
     out  PORTB, r16
 
     ; --- PORTC (PC2..PC5) para col5..8 (bits3..0) ---
@@ -176,7 +443,7 @@ cargar_columnas:
     out  PORTC, r16
     ret
 
-seleccionar_fila:
+	seleccionar_fila:
     rcall apagar_filas
     mov  r16, fila
     cpi  r16, 0x06
@@ -209,7 +476,6 @@ bit_ok:
     and  r18, r19
     out  PORTD, r18
     ret
-
 apagar_filas:
     in   r16, PORTD
     ori  r16, 0xFC    
@@ -229,138 +495,59 @@ apagar_columnas:
     ret
 
 retardo_fila:
-    ldi  r16, 0x80
+    ldi r16, 0xFF   ; mayor valor para ralentizar
 retardo_lp:
-    dec  r16
+    dec r16
     brne retardo_lp
     ret
 
-initUART:
-    ; Configura UBRR0
-    ldi r30, high(UBRR_VALUE)
-    sts UBRR0H, r30
-    ldi r30, low(UBRR_VALUE)
-    sts UBRR0L, r30
-
-    ; Formato: 8 bits, 1 stop bit
-    ldi r30, (1<<UCSZ01)|(1<<UCSZ00)
-    sts UCSR0C, r30
-
-	; Habilita RX y TX
-    ldi r30, (1<<RXEN0)|(1<<TXEN0)
-    sts UCSR0B, r30
-
+UART_CheckReceive:
+    lds temp,UCSR0A
+    sbrs temp,RXC0
+    ret          ; si no hay dato recibido, salir
+    lds temp,UDR0
+    cpi temp,'1'
+    breq set1
+    cpi temp,'2'
+    breq set2
+    cpi temp,'3'
+    breq set3
     ret
 
-UART_Receive:
-UART_RX_Wait:
-    lds r30, UCSR0A
-    sbrs r30, RXC0
-    rjmp UART_RX_Wait
-    
-	lds r19, UDR0
+set1:
+    ldi opcion_actual,1
+    ret
+set2:
+    ldi opcion_actual,2
+    ret
+set3:
+    ldi opcion_actual,3
     ret
 
 UART_Transmit:
-UART_TX_Wait:
-    lds r30, UCSR0A
-    sbrs r30, UDRE0
-    rjmp UART_TX_Wait
-    sts UDR0, r19
+    lds temp,UCSR0A
+    sbrs temp,UDRE0
+    rjmp UART_Transmit
+    sts UDR0,r18
     ret
 
 UART_SendString:
-UART_SendCharLoop:
-    lpm r19, Z+          ; cargar siguiente carácter desde memoria (program space)
-    cpi r19, 0x00        ; fin de string
-    breq UART_SendDone
+    lpm r18,Z+
+    cpi r18,0
+    breq fin_str
     rcall UART_Transmit
-    rjmp UART_SendCharLoop
-UART_SendDone:
+    rjmp UART_SendString
+fin_str:
     ret
 
 MostrarMenu:
-    ; Enviar mensaje de bienvenida
-    ldi ZH, high(WelcomeMsg)
-    ldi ZL, low(WelcomeMsg)
+    ldi ZH,high(WelcomeMsg<<1)
+    ldi ZL,low(WelcomeMsg<<1)
     rcall UART_SendString
-
-    ; Enviar menú
-    ldi ZH, high(MenuMsg)
-    ldi ZL, low(MenuMsg)
+    ldi ZH,high(MenuMsg<<1)
+    ldi ZL,low(MenuMsg<<1)
     rcall UART_SendString
-
-    ldi ZH, high(MenuOpciones)
-    ldi ZL, low(MenuOpciones)
+    ldi ZH,high(MenuOpciones<<1)
+    ldi ZL,low(MenuOpciones<<1)
     rcall UART_SendString
-
-    ; Esperar elección del usuario
-    rcall UART_Receive        ; bloqueante
-    ; r19 = opción recibida ('1', '2', etc.)
-    ret
-
-EjecutarOpcion:
-    cpi r19, '1'            ; opción 1 = mensaje desplazante
-    breq OpcionMensaje
-    cpi r19, '2'            ; opción 2 = figura 1
-    breq OpcionFigura1
-    cpi r19, '3'            ; opción 3 = figura 2
-    breq OpcionFigura2
-    rjmp main       ; si opción inválida, vuelve a mostrar menú
-
-OpcionMensaje:
-    ; Activar scroll automático
-    ldi offset, 0
-    rjmp LoopScroll          ; loop principal de scroll
-OpcionFigura1:
-    ; Llamar a rutina que muestra figura 1
-    rcall MostrarFigura1
-    rjmp main
-OpcionFigura2:
-    ; Llamar a rutina que muestra figura 2
-    rcall MostrarFigura2
-    rjmp main
-
-MostrarFigura1:
-    ldi ZH, high(Cara_Feliz)
-    ldi ZL, low(Cara_Feliz)
-MostrarFigura1_Loop:
-    rcall multiplexar_figura
-    rjmp MostrarFigura1_Loop   ; ciclo infinito, volver al menú con un reset si querés
-
-MostrarFigura2:
-    ldi ZH, high(Corazon)
-    ldi ZL, low(Corazon)
-MostrarFigura2_Loop:
-    rcall multiplexar_figura
-    rjmp MostrarFigura2_Loop   ; ciclo infinito, volver al menú con un reset si querés
-
-multiplexar_figura:
-    ldi fila, 0
-sig_fila_fig:
-    lpm columnas, Z+       ; cargar byte de fila actual
-    rcall cargar_columnas
-    rcall seleccionar_fila
-    rcall retardo_fila
-    rcall apagar_filas
-    rcall apagar_columnas
-    inc fila
-    cpi fila, 8
-    brlo sig_fila_fig
-    ret
-
-LoopScroll:
-    rcall multiplexar_una_vez
-
-    ; Avance de scroll por tiempo (frames)
-    inc framecnt
-    cpi framecnt, FRAME_STEP
-    brlo LoopScroll
-    clr framecnt
-
-    inc offset
-
-    cpi offset, (ANCHO_MSG - 7)
-    brlo LoopScroll
-    clr offset
-    rjmp LoopScroll
+    ret
