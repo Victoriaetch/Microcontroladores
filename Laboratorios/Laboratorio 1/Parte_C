@@ -1,6 +1,8 @@
 .include "m328pdef.inc"
 
 .def tmp     = r16
+.def sample  = r17
+.def idx     = r20  
 
 .cseg
 .org 0x0000
@@ -8,72 +10,55 @@
 
 
 RESET:
-
+    cli 
+    ;Stack
     ldi tmp, high(RAMEND)
     out SPH, tmp
     ldi tmp, low(RAMEND)
     out SPL, tmp
 
-    ; Configurar PORTD como salida 
+      ; PORTD como salida (R-2R)
     ldi tmp, 0xFF
     out DDRD, tmp
-    ; poner inicialmente 0
-    ldi tmp, 0x00
+    clr tmp
     out PORTD, tmp
 
-    ldi r31, high(LUT)   ; ZH
-    ldi r30, low(LUT)    ; ZL
+    ; inicio de LUT
+    ldi r30, low(LUT*2)
+    ldi r31, high(LUT*2)
 
-    ldi endH, high(LUT + 256)
-    ldi endL, low(LUT + 256)
+    ; idx = 0
+    clr idx
 
-
-    ldi tmp, low(78)
-    sts OCR1AL, tmp
-    ldi tmp, high(78)
-    sts OCR1AH, tmp
-
-    ; TCCR1A: normal port operation (0)
-    ldi tmp, 0
-    sts TCCR1A, tmp
-
-    ; TCCR1B: WGM12 = 1, prescaler = /8 -> CS12:0 = 010 (CS11 = 1)
-    ldi tmp, (1<<WGM12) | (1<<CS11)
-    sts TCCR1B, tmp
-
-    ; Asegurarnos que la bandera está limpia
-    ; Escribiendo 1 en OCF1A limpia la bandera
-    ldi tmp, (1<<OCF1A)
-    out TIFR1, tmp
-
-
+    ldi tmp, 9
+    out OCR0A, tmp
+    ldi tmp, (1<<WGM01)          ; CTC con OCR0A
+    out TCCR0A, tmp
+    ldi tmp, (1<<CS01)|(1<<CS00) ; prescaler /64
+    out TCCR0B, tmp
+    ldi tmp, (1<<OCF0A)          ; limpiar bandera inicial
+    out TIFR0, tmp
 
 main_loop:
-    ; Esperar a que OCF1A (Compare A) se ponga (polling)
 wait_flag:
-    in tmp, TIFR1
-    sbrs tmp, OCF1A       ; si bit OCF1A = 0 -> saltar siguiente instrucción (sbrs salta si bit SET)
-    rjmp wait_flag       ; si OCF1A = 0, seguir esperando
+    sbis TIFR0, OCF0A           
+    rjmp wait_flag
 
-    ; Limpiar la bandera escribiendo 1 en OCF1A
-    ldi tmp, (1<<OCF1A)
-    out TIFR1, tmp
+    ; limpiar bandera
+    ldi tmp, (1<<OCF0A)
+    out TIFR0, tmp
 
-    ; Cargar la siguiente muestra desde Flash: LPM Z+
-    lpm sample, Z+        ; sample = [Z]; Z = Z + 1
-
-    ; Volcar al puerto (salida digital al R-2R)
+    ; siguiente muestra
+    lpm sample, Z+
     out PORTD, sample
 
-    ; Si Z == LUT + 256 -> resetear Z a inicio
-    cp r30, endL
-    cpc r31, endH
-    brne main_loop       ; si no son iguales, continuar el loop (brne hace salto cuando Z != end)
-    ; Igual -> reiniciar Z
-    ldi r31, high(LUT)
-    ldi r30, low(LUT)
-    rjmp main_loop
+    ; cuando vuelve a 0, reiniciar Z
+    inc idx
+    brne main_loop               
 
+    ldi r30, low(LUT*2)
+    ldi r31, high(LUT*2)
+    rjmp main_loop
 ; -----------------------
 ; LUT: 256 bytes en memoria de programa
 ; -----------------------
