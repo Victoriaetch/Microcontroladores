@@ -1,37 +1,35 @@
+; =================================================================
+; Cinta transportadora con Punzonadora
+; =================================================================
 .include "m328pdef.inc"
 
 .def TEMP          = r16
-.def ESTADO        = r17        ; 0–4
+.def ESTADO        = r17        ; 0–4, 35
 .def PD_ANT        = r18        ; entradas previas
 .def AN            = r19        ; entradas actuales
 .def CARGA_ELEGIDA = r20        ; 0 = ninguna, 1=PB2, 2=PB3, 3=PB4
 .def CONTADOR      = r21        ; para repetir espera 1s
-.def FLAG_PB5      = r22        ; flag para indicar si PB5 ya ejecutó su secuencia
+.def USART_TEMP    = r22        ; temporal USART
+.def ESTADO_ANT    = r23        ; último estado mostrado
 
 .cseg
 .org 0x0000
     rjmp inicio
 
-; ---------------- Inicio ----------------
+; ---------------- USART inicial ----------------
 inicio:
-    ; PB0–PB5 como salida
+    ; Configuración de puertos, LEDs y entradas igual que antes
     ldi TEMP, 0x3F
     out DDRB, TEMP
-
-    ; PC1 como salida
-	sbi DDRC, 0
+    sbi DDRC, 0
     sbi DDRC, 1
-
-    ; LEDs iniciales: PB0 encendida (espera)
+    sbi DDRC, 3
+    cbi DDRC, 2
+    sbi PORTC, 2
     ldi TEMP, 0x01
     out PORTB, TEMP
-
-    ; Variables
     ldi ESTADO, 0
     ldi CARGA_ELEGIDA, 0
-    ldi FLAG_PB5, 0
-
-    ; PD2–PD6 entradas con pull-up
     cbi DDRD, 2
     cbi DDRD, 3
     cbi DDRD, 4
@@ -42,50 +40,58 @@ inicio:
     sbi PORTD, 4
     sbi PORTD, 5
     sbi PORTD, 6
-
-    ; Guardar estado inicial
     in PD_ANT, PIND
-    andi PD_ANT, 0x7C       ; solo PD2–PD6
-
-    ; Configurar TIMER0 para el delay
-    ldi TEMP, (1<<CS02)|(1<<CS00) ; prescaler 1024
+    andi PD_ANT, 0x7C
+    ldi TEMP, (1<<CS02)|(1<<CS00)
     out TCCR0B, TEMP
     ldi TEMP, 0
     out TCNT0, TEMP
+    ldi ESTADO_ANT, 255
+
+    ; Inicializar USART
+    rcall USART_Init
+
+    ; Enviar mensaje de inicio
+    ldi ZL, LOW(mensaje_inicio<<1)
+    ldi ZH, HIGH(mensaje_inicio<<1)
+    rcall USART_SendString
 
 main_loop:
+    ; Leer USART y pulsadores
+    rcall USART_CheckReceive
     in AN, PIND
-    andi AN, 0x7C            ; PD2–PD6
+    andi AN, 0x7C
 
-; ---------------- Estado 0: espera PB0 ----------------
+    ; Actualizar estado si cambió
+    rcall check_estado
+
+
+; ---------------- Estado 0: Espera inicial y activación con pulsador PD2 ---------------- 
+
     cpi ESTADO, 0
     brne estado1
-    sbis PIND, 2             ; PD2 presionado
+    sbis PIND, 2
     rjmp main_loop
     sbrc PD_ANT, 2
     rjmp main_loop
     ldi ESTADO, 1
     rcall actualizar_leds
     rjmp main_loop
-
 ; ---------------- Estado 1: seleccionar carga ----------------
 estado1:
     cpi ESTADO, 1
     brne estado2
 
-    ; Si carga aún no elegida
+    ; --- Carga por pulsador ---
     cpi CARGA_ELEGIDA, 0
-    brne main_loop  ; si ya está elegida, no hacemos nada
+    brne main_loop
 
-    ; PD3 → CARGA 1
     sbis PIND, 3
     rjmp check_pd4
     sbrc PD_ANT, 3
     rjmp check_pd4
     ldi CARGA_ELEGIDA, 1
-    rcall actualizar_leds
-    ldi ESTADO, 2        ; pasar inmediatamente a estado 2
-    rjmp main_loop
+    rjmp carga_elegida_usart
 
 check_pd4:
     sbis PIND, 4
@@ -93,9 +99,7 @@ check_pd4:
     sbrc PD_ANT, 4
     rjmp check_pd5
     ldi CARGA_ELEGIDA, 2
-    rcall actualizar_leds
-    ldi ESTADO, 2
-    rjmp main_loop
+    rjmp carga_elegida_usart
 
 check_pd5:
     sbis PIND, 5
@@ -103,6 +107,8 @@ check_pd5:
     sbrc PD_ANT, 5
     rjmp main_loop
     ldi CARGA_ELEGIDA, 3
+
+carga_elegida_usart:
     rcall actualizar_leds
     ldi ESTADO, 2
     rjmp main_loop
@@ -112,196 +118,347 @@ estado2:
     cpi ESTADO, 2
     brne estado3
 
+    sbis PINC, 2
+    rjmp main_loop
+
     ; --- Encender PB5 según carga ---
-    cpi CARGA_ELEGIDA, 1
+    cpi CARGA_ELEGIDA,1
     brne carga2
-    sbi PORTB, 5
-    ldi CONTADOR, 3
+    sbi PORTB,5
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-    ldi CONTADOR, 2
+    cbi PORTB,5
+    ldi CONTADOR,2
     rcall espera_multi
-    rjmp espera_pd6_estado2
+    rjmp espera_pd6
 
 carga2:
-    cpi CARGA_ELEGIDA, 2
+    cpi CARGA_ELEGIDA,2
     brne carga3
-    sbi PORTB, 5
-    ldi CONTADOR, 4
+    sbi PORTB,5
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-    ldi CONTADOR, 2
+    cbi PORTB,5
+    ldi CONTADOR,2
     rcall espera_multi
-    rjmp espera_pd6_estado2
+    rjmp espera_pd6
 
 carga3:
-    cpi CARGA_ELEGIDA, 3
-    brne espera_pd6_estado2
-    sbi PORTB, 5
-    ldi CONTADOR, 5
+    cpi CARGA_ELEGIDA,3
+    brne espera_pd6
+    sbi PORTB,5
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-    ldi CONTADOR, 3
+    cbi PORTB,5
+    ldi CONTADOR,3
     rcall espera_multi
 
-; --- Espera PD6 solo para pasar al estado 3 ---
-espera_pd6_estado2:
-    sbis PIND, 6
-    rjmp espera_pd6_estado2  ; se queda aquí hasta presionar PD6
-
-    ldi ESTADO, 3
+espera_pd6:
+    sbis PIND,6
+    rjmp espera_pd6
+    ldi ESTADO,3
     rcall actualizar_leds
     rjmp main_loop
 
-
-; ---------------- Estado 3: punzonadora PC0 ----------------
+; ---------------- Estado 3: punzonadora ----------------
 estado3:
-    cpi ESTADO, 3
+    cpi ESTADO,3
     brne estado35
-
-    ; --- Primer pulso PC0 1s ---
-    sbi PORTC, 0          ; encender PC0
-    ldi CONTADOR, 1
+    ; Primer pulso
+    sbi PORTC,0
+    ldi CONTADOR,1
     rcall espera_multi
-    cbi PORTC, 0          ; apagar PC0
-
-    ; --- Espera X según carga ---
-    cpi CARGA_ELEGIDA, 1
-    brne carga2_espera
-    ldi CONTADOR, 2        ; PD3 → 2s
+    ; Espera según carga
+    cpi CARGA_ELEGIDA,1
+    cbi PORTC,0
+    brne c2e
+    ldi CONTADOR,2
     rcall espera_multi
     rjmp pulso2
-carga2_espera:
-    cpi CARGA_ELEGIDA, 2
-    brne carga3_espera
-    ldi CONTADOR, 3        ; PD4 → 3s
+c2e:
+    cpi CARGA_ELEGIDA,2
+    brne c3e
+    cbi PORTC,0
+    ldi CONTADOR,3
     rcall espera_multi
     rjmp pulso2
-carga3_espera:
-    cpi CARGA_ELEGIDA, 3
-    brne fin_espera
-    ldi CONTADOR, 4        ; PD5 → 4s
+c3e:
+    cpi CARGA_ELEGIDA,3
+    brne fin_e3
+    cbi PORTC,0
+    ldi CONTADOR,4
     rcall espera_multi
-fin_espera:
-
+    rjmp pulso2
+fin_e3:
 pulso2:
-    ; --- Segundo pulso PC0 1s ---
-    sbi PORTC, 0
-    ldi CONTADOR, 1
+    sbi PORTC,0
+    ldi CONTADOR,1
     rcall espera_multi
-    cbi PORTC, 0
-
-    ; Pasar al estado 3.5
-    ldi ESTADO, 35
+    cbi PORTC,0
+    ldi CONTADOR,1
+    rcall espera_multi
+    ldi ESTADO,35
+    rcall actualizar_leds
     rjmp main_loop
 
-; ---------------- Estado 3.5: avance PB según carga ----------------
+; ---------------- Estado 4: avance PB ----------------
 estado35:
-    cpi ESTADO, 35
+    cpi ESTADO,35
     brne estado4
-
-    ; --- Encender PB correspondiente según carga ---
-    cpi CARGA_ELEGIDA, 1
-    brne carga2_avance
-    sbi PORTB, 5
-    ldi CONTADOR, 3        ; 3s
+    cpi CARGA_ELEGIDA,1
+    brne c2a
+    sbi PORTC,3
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-    rjmp fin_estado35
-carga2_avance:
-    cpi CARGA_ELEGIDA, 2
-    brne carga3_avance
-    sbi PORTB, 5
-    ldi CONTADOR, 4        ; 4s
+    cbi PORTC,3
+    rjmp fin_e35
+c2a:
+    cpi CARGA_ELEGIDA,2
+    brne c3a
+    sbi PORTC,3
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-    rjmp fin_estado35
-carga3_avance:
-    cpi CARGA_ELEGIDA, 3
-    brne fin_estado35
-    sbi PORTB, 5          ; PB5
-    ldi CONTADOR, 5        ; 5s
+    cbi PORTC,3
+    rjmp fin_e35
+c3a:
+    cpi CARGA_ELEGIDA,3
+    brne fin_e35
+    sbi PORTC,3
+    ldi CONTADOR,3
     rcall espera_multi
-    cbi PORTB, 5
-
-fin_estado35:
-    ; Pasar automáticamente al Estado 4
-    ldi ESTADO, 4
+    cbi PORTC,3
+    cbi PORTB,5
+fin_e35:
+    ldi ESTADO,4
+    rcall actualizar_leds
     rjmp main_loop
 
-
-
-; ---------------- Estado 4: LED final ----------------
+; ---------------- Estado 5: LED final ----------------
 estado4:
-    ; Apagar PB0–PB4 y encender PC1
-    cbi PORTB, 0
-    cbi PORTB, 1
-    cbi PORTB, 2
-    cbi PORTB, 3
-    cbi PORTB, 4
-    sbi PORTC, 1
-
-    ; Esperar 5 segundos
-    ldi CONTADOR, 5
+    cbi PORTB,0
+    cbi PORTB,1
+    cbi PORTB,2
+    cbi PORTB,3
+    cbi PORTB,4
+    sbi PORTC,1
+    ldi CONTADOR,5
 espera_final:
     rcall espera_1s
     dec CONTADOR
     brne espera_final
-
-    ; Volver al estado inicial
-    cbi PORTC, 1 
-    ldi ESTADO, 0
-    ldi CARGA_ELEGIDA, 0
+    cbi PORTC,1
+    ldi ESTADO,0
+    ldi CARGA_ELEGIDA,0
     rcall actualizar_leds
     rjmp main_loop
 
 ; ---------------- Rutinas auxiliares ----------------
 actualizar_leds:
-    cpi ESTADO, 0
-    breq leds_estado0
-    cbi PORTB, 0
-    sbi PORTB, 1
-    cpi CARGA_ELEGIDA, 1
+    cpi ESTADO,0
+    breq leds0
+    cbi PORTB,0
+    sbi PORTB,1
+    cpi CARGA_ELEGIDA,1
     brne ce2
-    sbi PORTB, 2
-    rjmp fin_leds
+    sbi PORTB,2
+    rjmp fin_led
 ce2:
-    cpi CARGA_ELEGIDA, 2
+    cpi CARGA_ELEGIDA,2
     brne ce3
-    sbi PORTB, 3
-    rjmp fin_leds
+    sbi PORTB,3
+    rjmp fin_led
 ce3:
-    cpi CARGA_ELEGIDA, 3
-    brne fin_leds
-    sbi PORTB, 4
-fin_leds:
+    cpi CARGA_ELEGIDA,3
+    brne fin_led
+    sbi PORTB,4
+fin_led:
     ret
 
-leds_estado0:
-    cbi PORTB, 1
-    cbi PORTB, 2
-    cbi PORTB, 3
-    cbi PORTB, 4
-    sbi PORTB, 0
+leds0:
+    cbi PORTB,1
+    cbi PORTB,2
+    cbi PORTB,3
+    cbi PORTB,4
+    sbi PORTB,0
     ret
 
-; ---------------- Espera múltiple ----------------
 espera_multi:
-espera_multi_loop:
     rcall espera_1s
     dec CONTADOR
-    brne espera_multi_loop
+    brne espera_multi
     ret
 
-; ---------------- Espera 1 segundo ----------------
 espera_1s:
     ldi r17,0
-espera_loop:
-    sbis TIFR0, TOV0
-    rjmp espera_loop
+e1s:
+    sbis TIFR0,TOV0
+    rjmp e1s
     ldi r16,(1<<TOV0)
     out TIFR0,r16
     inc r17
-    cpi r17, 61
-    brne espera_loop
+    cpi r17,61
+    brne e1s
     ret
+
+; ---------------- USART----------------
+USART_Init:
+    ldi r16, HIGH(103)
+    sts UBRR0H, r16
+    ldi r16, LOW(103)
+    sts UBRR0L, r16
+    ldi r16, (1<<RXEN0)|(1<<TXEN0)
+    sts UCSR0B, r16
+    ldi r16, (3<<UCSZ00)    ; 8 bits
+    sts UCSR0C, r16
+    ret
+
+USART_Transmit:
+    lds USART_TEMP, UCSR0A
+    sbrs USART_TEMP, UDRE0
+    rjmp USART_Transmit
+    sts UDR0, r16
+    ret
+
+; Devuelve en r16 el carácter recibido o 0 si no hay dato
+USART_Receive:
+    lds USART_TEMP, UCSR0A
+    sbrs USART_TEMP, RXC0     ; si RXC0=1 -> salta la siguiente instrucción
+    rjmp usart_no_data        ; si no está set -> no hay dato -> saltar
+    lds r16, UDR0            ; leer dato recibido
+    ret
+usart_no_data:
+    ldi r16, 0
+    ret
+
+; Leer string desde FLASH (lpm) usando Z (Z debe cargarse con msg<<1)
+USART_SendString:
+next_char:
+    lpm r16, Z+              ; leer byte de flash e incrementar Z
+    cpi r16, 0
+    breq end_string
+    rcall USART_Transmit
+    rjmp next_char
+end_string:
+    ret
+
+; Comprueba si llegó un carácter y lo procesa
+USART_CheckReceive:
+    push r16
+    rcall USART_Receive
+    cpi r16, 0
+    breq fin_usart
+
+    ; Reinicio
+    cpi r16, 'R'
+    breq reiniciar_estado
+
+    ; Solo aceptar 'A' en estado 0
+    cpi r16, 'A'
+    brne check_carga
+    cpi ESTADO, 0
+    brne fin_usart
+    ldi ESTADO, 1
+    sbi PORTB,1          ; Encender PB1
+    rcall actualizar_leds
+    rjmp fin_usart
+
+check_carga:
+    ; Solo aceptar carga en estado 1
+    cpi ESTADO, 1
+    brne fin_usart
+    cpi r16, '1'
+    breq carga1_usart
+    cpi r16, '2'
+    breq carga2_usart
+    cpi r16, '3'
+    breq carga3_usart
+    rjmp fin_usart
+
+carga1_usart:
+    ldi CARGA_ELEGIDA, 1
+    rjmp fin_carga_usart
+carga2_usart:
+    ldi CARGA_ELEGIDA, 2
+    rjmp fin_carga_usart
+carga3_usart:
+    ldi CARGA_ELEGIDA, 3
+
+fin_carga_usart:
+    rcall actualizar_leds
+    ldi ESTADO, 2
+fin_usart:
+    pop r16
+    ret
+
+
+reiniciar_estado:
+    ldi ESTADO, 0
+    ldi CARGA_ELEGIDA, 0
+    rcall actualizar_leds
+    pop r16
+    ret
+
+; ---------------- check_estado: imprime solo si cambió ----------------
+check_estado:
+    push r16
+    cp ESTADO, ESTADO_ANT
+    breq chk_end
+    mov ESTADO_ANT, ESTADO
+
+    cpi ESTADO, 0
+    breq ch0
+    cpi ESTADO, 1
+    breq ch1
+    cpi ESTADO, 2
+    breq ch2
+    cpi ESTADO, 3
+    breq ch3
+    cpi ESTADO, 35
+    breq ch35
+    cpi ESTADO, 4
+    breq ch4
+    rjmp chk_end
+
+ch0:
+    ldi ZL, LOW(msg_estado0<<1)
+    ldi ZH, HIGH(msg_estado0<<1)
+    rcall USART_SendString
+    rjmp chk_end
+ch1:
+    ldi ZL, LOW(msg_estado1<<1)
+    ldi ZH, HIGH(msg_estado1<<1)
+    rcall USART_SendString
+    rjmp chk_end
+ch2:
+    ldi ZL, LOW(msg_estado2<<1)
+    ldi ZH, HIGH(msg_estado2<<1)
+    rcall USART_SendString
+    rjmp chk_end
+ch3:
+    ldi ZL, LOW(msg_estado3<<1)
+    ldi ZH, HIGH(msg_estado3<<1)
+    rcall USART_SendString
+    rjmp chk_end
+ch35:
+    ldi ZL, LOW(msg_estado35<<1)
+    ldi ZH, HIGH(msg_estado35<<1)
+    rcall USART_SendString
+    rjmp chk_end
+ch4:
+    ldi ZL, LOW(msg_estado4<<1)
+    ldi ZH, HIGH(msg_estado4<<1)
+    rcall USART_SendString
+    rjmp chk_end
+
+chk_end:
+    pop r16
+    ret
+
+; ---------------- Mensajes ----------------
+mensaje_inicio: .db "USART activo", 0x0D, 0x0A, 0
+msg_estado0:	.db "Estado 0", 0x0D, 0x0A, 0
+msg_estado1:	.db "Estado 1", 0x0D, 0x0A, 0
+msg_estado2:	.db "Estado 2", 0x0D, 0x0A, 0
+msg_estado3:	.db "Estado 3", 0x0D, 0x0A, 0
+msg_estado35:	.db "Estado 4", 0x0D, 0x0A, 0
+msg_estado4:	.db "Estado 5", 0x0D, 0x0A, 0
