@@ -1,0 +1,143 @@
+// Lectura de potenciómetro y LDR con control de LEDs
+// Potenciómetro: pin analogico A0
+// LDR: pin analogico A1
+// LED controlado por potenciómetro: Pin 9 (PWM)LED VERDE
+// LED controlado por LDR: Pin 10 (PWM)LED ROJO
+
+// Definición de pines
+const int POT_PIN = A0;     // Pin analógico para el potenciómetro
+const int LDR_PIN = A1;     // Pin analógico para la LDR
+const int LED1 = 9;         // Pin para el LED controlado por potenciómetro
+const int LED2 = 10;        // Pin para el LED controlado por LDR
+
+// Variables para almacenar lecturas
+int valorPot = 0;           // Valor leído del potenciómetro (0-1023)
+int valorLDR = 0;           // Valor leído de la LDR (0-1023)
+int brilloLED1 = 0;         // Brillo para LED del potenciómetro (0-255)
+int brilloLED2 = 0;         // Brillo para LED de la LDR (0-255)
+
+// Variables para calibración de la LDR
+const int LDR_MIN = 50;      // Valor mínimo esperado de la LDR (mucha luz)
+const int LDR_MAX = 900;     // Valor máximo esperado de la LDR (poca luz)
+
+void setup() {
+  // Configurar pines
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  
+  // Iniciar comunicación serial para monitoreo
+  Serial.begin(9600);
+  
+  // Mensaje inicio
+  Serial.println("~Sistema iniciado - Potenciometro y LDR~");
+  Serial.println("======================================");
+}
+
+void loop() {
+  // Leer valores de los sensores
+  leerSensores();
+  // Calcular brillos de los LEDs
+  calcularBrillos();
+  // Aplicar brillos a los LEDs
+  controlarLEDs();
+  // Mostrar valores por serial (opcional, para debugging)
+  mostrarSerial();
+  // delay para estabilidad
+  delay(100);
+}
+
+void leerSensores() {
+  // Leer potenciómetro (promedio de 3 lecturas para suavizar)
+  valorPot = 0;
+  for(int i = 0; i < 3; i++) {
+    valorPot += analogRead(POT_PIN);
+    delay(5);
+  }
+  valorPot = valorPot / 3;
+  
+  // Leer LDR (promedio de 3 lecturas para suavizar)
+  valorLDR = 0;
+  for(int i = 0; i < 3; i++) {
+    valorLDR += analogRead(LDR_PIN);
+    delay(5);
+  }
+  valorLDR = valorLDR / 3;
+}
+
+void calcularBrillos() {
+  // Convertir valor del potenciómetro (0-1023) a brillo (0-255)
+  brilloLED1 = map(valorPot, 0, 1023, 0, 255);
+  
+  // Convertir valor de la LDR a brillo (invertido: más luz = menos brillo)
+  // Restringir el valor de la LDR dentro del rango calibrado
+  int ldrRestringido = constrain(valorLDR, LDR_MIN, LDR_MAX);
+  brilloLED2 = map(ldrRestringido, LDR_MAX, LDR_MIN, 0, 255);
+  
+  // Asegura que los valores estén en el rango correcto
+  brilloLED1 = constrain(brilloLED1, 0, 255);
+  brilloLED2 = constrain(brilloLED2, 0, 255);
+}
+
+void controlarLEDs() {
+  // escribe brillo al LED controlado por potenciómetro
+  analogWrite(LED1, brilloLED1);
+  
+  // Escribe brillo al LED controlado por LDR
+  analogWrite(LED2, brilloLED2);
+}
+
+void mostrarSerial() {
+  // Mostrar valores cada 10 iteraciones para no saturar el puerto serial
+  static unsigned long ultimaVez = 0;
+  static int contador = 0;
+  
+  contador++;
+  if(millis() - ultimaVez > 2000) { // Mostrar cada 2 segundos
+    Serial.println("=== Valores Actuales ===");
+    Serial.print("Potenciometro: ");
+    Serial.print(valorPot);
+    Serial.print(" -> Brillo LED: ");
+    Serial.println(brilloLED1);
+    
+    Serial.print("LDR: ");
+    Serial.print(valorLDR);
+    Serial.print(" -> Brillo LED: ");
+    Serial.println(brilloLED2);
+    
+    // Mostrar estado de luz aproximado
+    if(valorLDR < 300) {
+      Serial.println("Estado: Mucha luz ambiente");
+    } else if(valorLDR < 600) {
+      Serial.println("Estado: Luz ambiente moderada");
+    } else {
+      Serial.println("Estado: Poca luz ambiente");
+    }
+    
+    Serial.println("------------------------");
+    ultimaVez = millis();
+    contador = 0;
+  }
+}
+
+// Función adicional para calibrar la LDR
+void calibrarLDR() {
+  Serial.println("=== Calibracion de LDR ===");
+  Serial.println("Coloque la LDR en condiciones de MAXIMA luz y presione cualquier tecla");
+  while(!Serial.available());
+  Serial.read();
+  
+  int maxLuz = analogRead(LDR_PIN);
+  Serial.print("Valor maxima luz: ");
+  Serial.println(maxLuz);
+  
+  Serial.println("Coloque la LDR en condiciones de MINIMA luz y presione cualquier tecla");
+  while(!Serial.available());
+  Serial.read();
+  
+  int minLuz = analogRead(LDR_PIN);
+  Serial.print("Valor minima luz: ");
+  Serial.println(minLuz);
+  
+  Serial.println("Calibracion completada");
+  Serial.println("========================");
+}
