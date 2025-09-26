@@ -23,7 +23,7 @@
     jmp RESET
 
 ; =================================================================
-; Mensajes del menú (Monitor serial)
+; MENSAJES DEL MENU (Monitor serial)
 ; =================================================================
 BienvenidoMsg: .db "Bienvenido al sistema de dibujo", 0x0D, 0x0A, 0
 MenuMsg .db "Seleccione una opcion: ", 0x0D, 0x0A, 0
@@ -32,7 +32,7 @@ FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
 
 
 ; =================================================================
-; Inicialización
+; INICIALIZACIÓN
 ; =================================================================
 RESET:
     ; Inicia stack pointer
@@ -141,7 +141,6 @@ ejecutar_cruz:
     rcall MostrarMenu
     rjmp MAIN
 
-
 ejecutar_ambas:
     ; LED ON
     sbi PORTB, 5
@@ -163,7 +162,6 @@ ejecutar_ambas:
     ldi r24, low(3000)
     ldi r25, high(3000)
     rcall DELAY_MS
-    
     call CRUZ
     
     ; Asegurar solenoide subido al finalizar
@@ -176,53 +174,34 @@ ejecutar_ambas:
     rjmp MAIN
 
 
-USART_Init:
-    ; Configurar baudios
-    ldi temp, high(UBRR_VAL)
-    sts UBRR0H, temp
-    ldi temp, low(UBRR_VAL)
-    sts UBRR0L, temp
+; =================================================================
+; SUBRUTINAS DE MOVIMIENTO
+; =================================================================
+MOVER_AL_CENTRO:
+    ; Asegurar que el solenoide esté SUBIDO durante el movimiento hacia el centro
+    call SUBIR_SOLENOIDE_COMPLETO
 
-    ; Habilitar receptor e interrupción de recepción
-    ldi temp, (1<<RXEN0)|(1<<RXCIE0)
-    sts UCSR0B, temp
+    ldi r24, low(5000)
+    ldi r25, high(5000)
 
-    ; Configurar formato: 8 bits, 1 stop bit, sin paridad
-    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
-    sts UCSR0C, temp
+    ; Mover a la izquierda
+    sbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+    cbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+
+    ; Mover abajo
+    sbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+    cbi PORTD, MOV_ABAJO
+
+    ; Pequeña pausa final
+    ldi r24, low(3000)
+    ldi r25, high(3000)
+    rcall DELAY_MS
     ret
-
-; INTERRUPCIÓN DE RECEPCIÓN SERIAL 
-USART_RXC:
-    ; Guardar registros
-    push temp
-    in temp, SREG
-    push temp
-
-    ; Leer dato recibido
-    lds comando, UDR0
-
-    ; Procesar comando
-    cpi comando, '1'
-    breq DIBUJAR_TRIANGULO
-    cpi comando, '2'
-    breq DIBUJAR_CIRCULO
-    cpi comando, '3'
-    breq DIBUJAR_CRUZ
-    cpi comando, 'T'
-    breq DIBUJAR_TODOS
-    cpi comando, 't'
-    breq DIBUJAR_TODOS
-
-    ; Restaurar registros y retornar
-USART_RXC_END:
-    pop temp
-    out SREG, temp
-    pop temp
-    reti
-
-;FUNCIONES DE DIBUJOS
-
+    ; estamos en la posición inicial para dibujo    
+  
 DIBUJAR_TRIANGULO:
     call TRIANGULO
     rjmp USART_RXC_END
@@ -243,24 +222,6 @@ DIBUJAR_TODOS:
     call CIRCULO
     rjmp USART_RXC_END
 
-RESET_POSITION:
-    ; Guardar registros
-    push temp
-    push temp2
-
-    ; Primero: mover hacia arriba hasta tocar el límite superior
-    call MOVER_ARRIBA_HASTA_LIMITE
-    
-    ; Segundo: mover hacia derecha hasta tocar el límite derecho  
-    call MOVER_DERECHA_HASTA_LIMITE
-    
-    ; estamos en la posición inicial (superior derecha)
-    ; Esta posición se considera (0,0) para nuestros dibujos
-    
-    ; Restaurar registros
-    pop temp2
-    pop temp
-    ret
 
 MOVER_ARRIBA_HASTA_LIMITE:
     ; Leer sensor de límite superior (asumiendo que está en PINB0)
@@ -344,28 +305,6 @@ CRUZ:
     cbi PORTD, SUBIR_SOLENOIDE
     ret
 
-; CÍRCULO (APROXIMACIÓN) 
-CIRCULO:
-    ; Activar solenoide (bajar lápiz)
-    sbi PORTD, BAJA_SOLENOIDE
-    call DELAY_CORTO_FUNC
-
-    ; Dibujar círculo (aproximación con 8 segmentos)
-    ldi contador, 8
-CIRCULO_LOOP:
-    call MOVER_DERECHA_CORTO
-    call MOVER_ABAJO_CORTO
-    call MOVER_IZQUIERDA_CORTO
-    call MOVER_ARRIBA_CORTO
-    dec contador
-    brne CIRCULO_LOOP
-
-    ; Levantar lápiz
-    cbi PORTD, BAJA_SOLENOIDE
-    sbi PORTD, SUBIR_SOLENOIDE
-    call DELAY_CORTO_FUNC
-    cbi PORTD, SUBIR_SOLENOIDE
-    ret
 
 ; FUNCIONES DE MOVIMIENTO 
 MOVER_DERECHA_CORTO:
@@ -439,6 +378,55 @@ MOVER_ABAJO_LARGO:
     call DELAY_LARGO_FUNC
     cbi PORTD, MOV_ABAJO
     ret
+
+; =================================================================
+; RUTINAS UART
+; =================================================================
+USART_Init:
+    ; Configurar baudios
+    ldi temp, high(UBRR_VAL)
+    sts UBRR0H, temp
+    ldi temp, low(UBRR_VAL)
+    sts UBRR0L, temp
+
+    ; Habilitar receptor e interrupción de recepción
+    ldi temp, (1<<RXEN0)|(1<<RXCIE0)
+    sts UCSR0B, temp
+
+    ; Configurar formato: 8 bits, 1 stop bit, sin paridad
+    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
+    sts UCSR0C, temp
+    ret
+
+; INTERRUPCIÓN DE RECEPCIÓN SERIAL 
+USART_RXC:
+    ; Guardar registros
+    push temp
+    in temp, SREG
+    push temp
+
+    ; Leer dato recibido
+    lds comando, UDR0
+
+    ; Procesar comando
+    cpi comando, '1'
+    breq DIBUJAR_TRIANGULO
+    cpi comando, '2'
+    breq DIBUJAR_CIRCULO
+    cpi comando, '3'
+    breq DIBUJAR_CRUZ
+    cpi comando, 'T'
+    breq DIBUJAR_TODOS
+    cpi comando, 't'
+    breq DIBUJAR_TODOS
+
+    ; Restaurar registros y retornar
+USART_RXC_END:
+    pop temp
+    out SREG, temp
+    pop temp
+    reti
+
 
 
 ; FUNCIONES DE DELAY 
