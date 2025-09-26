@@ -30,7 +30,6 @@ MenuMsg .db "Seleccione una opcion: ", 0x0D, 0x0A, 0
 MenuOpciones .db "1: Triangulo  2: Cruz  T: Ambas figuras ", 0x0D, 0x0A, 0
 FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
 
-
 ; =================================================================
 ; INICIALIZACIÓN
 ; =================================================================
@@ -173,7 +172,6 @@ ejecutar_ambas:
     rcall MostrarMenu
     rjmp MAIN
 
-
 ; =================================================================
 ; SUBRUTINAS DE MOVIMIENTO
 ; =================================================================
@@ -201,72 +199,25 @@ MOVER_AL_CENTRO:
     rcall DELAY_MS
     ret
     ; estamos en la posición inicial para dibujo    
-  
-DIBUJAR_TRIANGULO:
-    call TRIANGULO
-    rjmp USART_RXC_END
 
-DIBUJAR_CIRCULO:
-    call CIRCULO
-    rjmp USART_RXC_END
-
-DIBUJAR_CRUZ:
-    call CRUZ
-    rjmp USART_RXC_END
-
-DIBUJAR_TODOS:
-    call TRIANGULO
-    call DELAY_LARGO_FUNC
-    call CRUZ
-    call DELAY_LARGO_FUNC
-    call CIRCULO
-    rjmp USART_RXC_END
-
-
-MOVER_ARRIBA_HASTA_LIMITE:
-    ; Leer sensor de límite superior (asumiendo que está en PINB0)
-    in temp, PINB
-    andi temp, (1<<PB0)
-    
-    ; Si ya estamos en el límite, salir
-    brne MOVER_ARRIBA_HASTA_LIMITE_END
-    
-    ; Mover hacia arriba continuamente
-MOVER_ARRIBA_LOOP:
-    sbi PORTD, MOV_ARRIBA
-    call DELAY_CORTO_FUNC
-    
-    ; Verificar sensor
-    in temp, PINB
-    andi temp, (1<<PB0)
-    breq MOVER_ARRIBA_LOOP  ; Continuar si no se ha alcanzado el límite
-    
-    ; Detener movimiento
-MOVER_ARRIBA_HASTA_LIMITE_END:
-    cbi PORTD, MOV_ARRIBA
+SUBIR_SOLENOIDE_COMPLETO:
+    ; Asegurarse de que el solenoide esté completamente subido
+    cbi PORTD, BAJA_SOLENOIDE  ; Apagar bajada
+    sbi PORTD, SUBIR_SOLENOIDE ; Activar subida
+    ldi r24, low(3000)         ; Tiempo suficiente para subir
+    ldi r25, high(3000)
+    rcall DELAY_MS
+    cbi PORTD, SUBIR_SOLENOIDE ; Apagar subida
     ret
 
-MOVER_DERECHA_HASTA_LIMITE:
-    ; Leer sensor de límite derecho (asumiendo que está en PINB1)
-    in temp, PINB
-    andi temp, (1<<PB1)
-    
-    ; Si ya estamos en el límite, salir
-    brne MOVER_DERECHA_HASTA_LIMITE_END
-    
-    ; Mover hacia derecha continuamente
-MOVER_DERECHA_LOOP:
-    sbi PORTD, MOV_DERECHA
-    call DELAY_CORTO_FUNC
-    
-    ; Verificar sensor
-    in temp, PINB
-    andi temp, (1<<PB1)
-    breq MOVER_DERECHA_LOOP  ; Continuar si no se ha alcanzado el límite
-    
-    ; Detener movimiento
-MOVER_DERECHA_HASTA_LIMITE_END:
-    cbi PORTD, MOV_DERECHA
+BAJAR_SOLENOIDE_COMPLETO:
+    ; Asegurarse de que el solenoide esté completamente bajado
+    cbi PORTD, SUBIR_SOLENOIDE ; Apagar subida
+    sbi PORTD, BAJA_SOLENOIDE  ; Activar bajada
+    ldi r24, low(3000)         ; Tiempo suficiente para bajar
+    ldi r25, high(3000)
+    rcall DELAY_MS
+    cbi PORTD, BAJA_SOLENOIDE  ; Apagar bajada
     ret
 
 TRIANGULO:
@@ -305,79 +256,6 @@ CRUZ:
     cbi PORTD, SUBIR_SOLENOIDE
     ret
 
-
-; FUNCIONES DE MOVIMIENTO 
-MOVER_DERECHA_CORTO:
-    sbi PORTD, MOV_DERECHA
-    call DELAY_CORTO_FUNC
-    cbi PORTD, MOV_DERECHA
-    ret
-
-MOVER_IZQUIERDA_CORTO:
-    sbi PORTD, MOV_IZQUIERDA
-    call DELAY_CORTO_FUNC
-    cbi PORTD, MOV_IZQUIERDA
-    ret
-
-MOVER_ARRIBA_CORTO:
-    sbi PORTD, MOV_ARRIBA
-    call DELAY_CORTO_FUNC
-    cbi PORTD, MOV_ARRIBA
-    ret
-
-MOVER_ABAJO_CORTO:
-    sbi PORTD, MOV_ABAJO
-    call DELAY_CORTO_FUNC
-    cbi PORTD, MOV_ABAJO
-    ret
-
-MOVER_DERECHA_MEDIO:
-    sbi PORTD, MOV_DERECHA
-    call DELAY_MEDIO_FUNC
-    cbi PORTD, MOV_DERECHA
-    ret
-
-MOVER_IZQUIERDA_MEDIO:
-    sbi PORTD, MOV_IZQUIERDA
-    call DELAY_MEDIO_FUNC
-    cbi PORTD, MOV_IZQUIERDA
-    ret
-
-MOVER_ARRIBA_MEDIO:
-    sbi PORTD, MOV_ARRIBA
-    call DELAY_MEDIO_FUNC
-    cbi PORTD, MOV_ARRIBA
-    ret
-
-MOVER_ABAJO_MEDIO:
-    sbi PORTD, MOV_ABAJO
-    call DELAY_MEDIO_FUNC
-    cbi PORTD, MOV_ABAJO
-    ret
-
-MOVER_DERECHA_LARGO:
-    sbi PORTD, MOV_DERECHA
-    call DELAY_LARGO_FUNC
-    cbi PORTD, MOV_DERECHA
-    ret
-
-MOVER_IZQUIERDA_LARGO:
-    sbi PORTD, MOV_IZQUIERDA
-    call DELAY_LARGO_FUNC
-    cbi PORTD, MOV_IZQUIERDA
-    ret
-
-MOVER_ARRIBA_LARGO:
-    sbi PORTD, MOV_ARRIBA
-    call DELAY_LARGO_FUNC
-    cbi PORTD, MOV_ARRIBA
-    ret
-
-MOVER_ABAJO_LARGO:
-    sbi PORTD, MOV_ABAJO
-    call DELAY_LARGO_FUNC
-    cbi PORTD, MOV_ABAJO
-    ret
 
 ; =================================================================
 ; RUTINAS UART
@@ -427,9 +305,9 @@ USART_RXC_END:
     pop temp
     reti
 
-
-
-; FUNCIONES DE DELAY 
+; =================================================================
+; DELAYS
+; ================================================================
 DELAY_CORTO_FUNC:
     ldi r24, low(DELAY_CORTO)
     ldi r25, high(DELAY_CORTO)
@@ -467,6 +345,10 @@ DELAY_MS_INNER:
     dec r26
     brne DELAY_MS_INNER
     rjmp DELAY_MS_LOOP
+
+; ======================
+; Mensajes adicionales
+; ======================
 
 
 
