@@ -22,18 +22,18 @@
 .org 0x0000
     jmp RESET
 
-;=======================================================================
+; =================================================================
 ; Mensajes del menú (Monitor serial)
-;=======================================================================
+; =================================================================
 BienvenidoMsg: .db "Bienvenido al sistema de dibujo", 0x0D, 0x0A, 0
 MenuMsg .db "Seleccione una opcion: ", 0x0D, 0x0A, 0
 MenuOpciones .db "1: Triangulo  2: Cruz  T: Ambas figuras ", 0x0D, 0x0A, 0
 FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
 
 
-;======================
+; =================================================================
 ; Inicialización
-;======================
+; =================================================================
 RESET:
     ; Inicia stack pointer
     ldi temp, high(RAMEND)
@@ -73,8 +73,52 @@ RESET:
     ldi r25, high(3000)
     rcall DELAY_MS
 
+; =================================================================
+; LOOP PRINCIPAL
+; =================================================================
 MAIN:
+    rcall UART_CheckReceive
+    cpi opcion_actual, '1'
+    breq ejecutar_triangulo
+    cpi opcion_actual, '2'
+    breq ejecutar_cruz
+    cpi opcion_actual, 'T'
+    breq ejecutar_ambas
+    cpi opcion_actual, 't'
+    breq ejecutar_ambas
+
     rjmp MAIN
+
+ejecutar_triangulo:
+    ; LED ON
+    sbi PORTB, 5
+    
+    ldi ZH, high(FiguraMsg<<1)
+    ldi ZL, low(FiguraMsg<<1)
+    rcall UART_SendString
+    ldi ZH, high(TrianguloMsg<<1)
+    ldi ZL, low(TrianguloMsg<<1)
+    rcall UART_SendString
+
+    call MOVER_AL_CENTRO
+    ldi r24, low(3000)
+    ldi r25, high(3000)
+    rcall DELAY_MS
+    call TRIANGULO
+
+    ; Asegurar solenoide subido al finalizar
+    call SUBIR_SOLENOIDE_COMPLETO
+    
+    ; LED OFF
+    cbi PORTB, 5
+    clr opcion_actual
+    rcall MostrarMenu
+    rjmp MAIN
+
+
+
+
+
 
 USART_Init:
     ; Configurar baudios
