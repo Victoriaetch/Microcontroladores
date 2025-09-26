@@ -250,71 +250,94 @@ TRIANGULO:
     ret
 
 CRUZ:
-    ; Activar solenoide (bajar lápiz)
-    sbi PORTD, BAJA_SOLENOIDE
-    call DELAY_CORTO_FUNC
+    ; Bajar solenoide para dibujar
+    call BAJAR_SOLENOIDE_COMPLETO
 
-    ; Dibujar cruz
-    call MOVER_ABAJO_MEDIO
-    call MOVER_ARRIBA_MEDIO
-    call MOVER_DERECHA_MEDIO
-    call MOVER_IZQUIERDA_MEDIO
+    ldi r24, low(3000)
+    ldi r25, high(3000)
+    rcall DELAY_MS
+
+    ; Dibujar cruz (vertical)
+    sbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+    cbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+    cbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+    cbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+    cbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+    cbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+    cbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+
+    ; Dibujar cruz (horizontal)
+
+    sbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+    cbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_DERECHA
+    rcall DELAY_MS
+    cbi PORTD, MOV_DERECHA
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_DERECHA
+    rcall DELAY_MS
+    cbi PORTD, MOV_DERECHA
+    rcall DELAY_MS
 
     ; Levantar lápiz
-    cbi PORTD, BAJA_SOLENOIDE
-    sbi PORTD, SUBIR_SOLENOIDE
-    call DELAY_CORTO_FUNC
-    cbi PORTD, SUBIR_SOLENOIDE
+    call SUBIR_SOLENOIDE_COMPLETO
     ret
-
 
 ; =================================================================
 ; RUTINAS UART
 ; =================================================================
-USART_Init:
-    ; Configurar baudios
-    ldi temp, high(UBRR_VAL)
-    sts UBRR0H, temp
-    ldi temp, low(UBRR_VAL)
-    sts UBRR0L, temp
+UART_CheckReceive:
+    lds temp, UCSR0A
+	sbrs temp, RXC0
+	ret
+	lds opcion_actual, UDR0
+	ret
 
-    ; Habilitar receptor e interrupción de recepción
-    ldi temp, (1<<RXEN0)|(1<<RXCIE0)
-    sts UCSR0B, temp
+UART_Transmit:
+	lds temp, UCSR0A
+	sbrs temp, UDRE0
+	rjmp UART_Transmit
+	sts UDR0, r18
+	ret
 
-    ; Configurar formato: 8 bits, 1 stop bit, sin paridad
-    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
-    sts UCSR0C, temp
-    ret
+UART_SendString:
+	lpm r18, Z+
+	cpi r18, 0
+	breq fin_str
+	rcall UART_Transmit
+	rcall UART_SendString
+fin_str:
+	ret
 
-; INTERRUPCIÓN DE RECEPCIÓN SERIAL 
-USART_RXC:
-    ; Guardar registros
-    push temp
-    in temp, SREG
-    push temp
-
-    ; Leer dato recibido
-    lds comando, UDR0
-
-    ; Procesar comando
-    cpi comando, '1'
-    breq DIBUJAR_TRIANGULO
-    cpi comando, '2'
-    breq DIBUJAR_CIRCULO
-    cpi comando, '3'
-    breq DIBUJAR_CRUZ
-    cpi comando, 'T'
-    breq DIBUJAR_TODOS
-    cpi comando, 't'
-    breq DIBUJAR_TODOS
-
-    ; Restaurar registros y retornar
-USART_RXC_END:
-    pop temp
-    out SREG, temp
-    pop temp
-    reti
+MostrarMenu:
+    ldi ZH, high(BienvenidoMsg<<1)
+    ldi ZH, low(BienvenidoMsg<<1)
 
 ; =================================================================
 ; DELAYS
