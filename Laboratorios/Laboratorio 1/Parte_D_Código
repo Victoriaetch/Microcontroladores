@@ -185,12 +185,12 @@ MOVER_AL_CENTRO:
     ; Asegurar que el solenoide esté SUBIDO durante el movimiento hacia el centro
     call SUBIR_SOLENOIDE_COMPLETO
 
-    ldi r24, low(5000)
+    ldi r24, low(5000)             ; Tiempo de movimiento horizontal/vertical
     ldi r25, high(5000)
 
     ; Mover a la izquierda
     sbi PORTD, MOV_IZQUIERDA
-    rcall DELAY_MS
+    rcall DELAY_MS                 ; Esperar el tiempo necesario
     cbi PORTD, MOV_IZQUIERDA
     rcall DELAY_MS
 
@@ -209,7 +209,7 @@ SUBIR_SOLENOIDE_COMPLETO:
     ; Asegurarse de que el solenoide esté completamente subido
     cbi PORTD, BAJA_SOLENOIDE  ; Apagar bajada
     sbi PORTD, SUBIR_SOLENOIDE ; Activar subida
-    ldi r24, low(3000)         ; Tiempo suficiente para subir
+    ldi r24, low(3000)         ; Delay para que suba completamente
     ldi r25, high(3000)
     rcall DELAY_MS
     cbi PORTD, SUBIR_SOLENOIDE ; Apagar subida
@@ -219,7 +219,7 @@ BAJAR_SOLENOIDE_COMPLETO:
     ; Asegurarse de que el solenoide esté completamente bajado
     cbi PORTD, SUBIR_SOLENOIDE ; Apagar subida
     sbi PORTD, BAJA_SOLENOIDE  ; Activar bajada
-    ldi r24, low(3000)         ; Tiempo suficiente para bajar
+    ldi r24, low(3000)         ; Delay suficiente para bajar
     ldi r25, high(3000)
     rcall DELAY_MS
     cbi PORTD, BAJA_SOLENOIDE  ; Apagar bajada
@@ -233,7 +233,7 @@ TRIANGULO:
     ldi r25, high(3000)
     rcall DELAY_MS
 
-    ; Dibujar triángulo
+    ; Dibujar los tres lados del triángulo
     sbi PORTD, MOV_ABAJO
     rcall DELAY_MS
     cbi PORTD, MOV_ABAJO
@@ -251,7 +251,7 @@ TRIANGULO:
     cbi PORTD, MOV_ARRIBA
     rcall DELAY_MS
 
-    ; Levantar lápiz
+    ; Levantar lápiz al finalizar
     call SUBIR_SOLENOIDE_COMPLETO
     ret
 
@@ -295,7 +295,6 @@ CRUZ:
     rcall DELAY_MS
 
     ; Dibujar cruz (horizontal)
-
     sbi PORTD, MOV_IZQUIERDA
     rcall DELAY_MS
     cbi PORTD, MOV_IZQUIERDA
@@ -311,7 +310,7 @@ CRUZ:
     cbi PORTD, MOV_DERECHA
     rcall DELAY_MS
 
-    ; Levantar lápiz
+    ; Levantar lápiz al finalizar
     call SUBIR_SOLENOIDE_COMPLETO
     ret
 
@@ -319,38 +318,38 @@ CRUZ:
 ; RUTINAS UART
 ; =================================================================
 UART_CheckReceive:
-    lds temp, UCSR0A
-	sbrs temp, RXC0
-	ret
-	lds opcion_actual, UDR0
+    lds temp, UCSR0A             ; Leer registro de estado UART
+	sbrs temp, RXC0              ; Si no hay dato recibido, saltar siguiente instrucción
+	ret                          ; Retorna si no hay dato
+	lds opcion_actual, UDR0      ; Si hay dato, leerlo del buffer UART
 	ret
 
 UART_Transmit:
 	lds temp, UCSR0A
-	sbrs temp, UDRE0
+	sbrs temp, UDRE0             ; Espera hasta que el buffer de transmisión esté vacío
 	rjmp UART_Transmit
-	sts UDR0, r18
+	sts UDR0, r18                ; Enviar el byte almacenado en r18
 	ret
 
 UART_SendString:
-	lpm r18, Z+
-	cpi r18, 0
-	breq fin_str
-	rcall UART_Transmit
-	rcall UART_SendString
+	lpm r18, Z+                  ; Leer byte desde memoria de programa usando puntero Z
+	cpi r18, 0                   ; Comprobar si es fin de string (0)
+	breq fin_str                 ; Si sí, terminar
+	rcall UART_Transmit          ; Enviar byte
+	rcall UART_SendString        ; Llamar recursivamente para el siguiente byte
 fin_str:
 	ret
 
 MostrarMenu:
     ldi ZH, high(BienvenidoMsg<<1)
     ldi ZH, low(BienvenidoMsg<<1)
-	rcall UART_SendString
+	rcall UART_SendString               ; Mostrar mensaje de bienvenida
     ldi ZH, high(MenuMsg<<1)
     ldi ZH, low(MenuMsg<<1)
-	rcall UART_SendString
+	rcall UART_SendString               ; Mostrar mensaje de "Seleccione una opción"
     ldi ZH, high(MenuOpciones<<1)
     ldi ZH, low(MenuOpciones<<1)
-	rcall UART_SendString
+	rcall UART_SendString               ; Mostrar las opciones disponibles
 	ret
 
 ; =================================================================
@@ -362,28 +361,24 @@ DELAY_MS:
     push r26
     push r27
 DELAY_MS_LOOP:
-    sbiw r24, 1
-    brne DELAY_MS_INNER
+    sbiw r24, 1                 ; Decrementar contador r24:r25
+    brne DELAY_MS_INNER         ; Si no es cero, entrar al loop interno
     pop r27
     pop r26
     pop r25
     pop r24
-    ret
+    ret                         ; Retornar de la rutina cuando el contador principal llega a 0
 DELAY_MS_INNER:
-    ldi r26, low(16000/4)
+    ldi r26, low(16000/4)       ; Ajuste según F_CPU para 1 ms
     ldi r27, high(16000/4)
 DELAY_MS_INNER_LOOP:
     sbiw r26, 1
     brne DELAY_MS_INNER_LOOP
-    rjmp DELAY_MS_LOOP
+    rjmp DELAY_MS_LOOP          ; Cuando termina el bucle interno, decrementar el contador principal
 
-; ======================
+; ================================================================
 ; Mensajes adicionales
-; ======================
+; ================================================================
 TrianguloMsg:  .db "Triangulo seleccionado",0x0D,0x0A,0
 CruzMsg:       .db "Cruz seleccionada",0x0D,0x0A,0
 AmbasMsg:      .db "Ambas figuras seleccionadas",0x0D,0x0A,0
-
-
-
-
