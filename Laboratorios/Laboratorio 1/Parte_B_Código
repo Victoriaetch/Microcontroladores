@@ -1,3 +1,6 @@
+; =================================================================
+; Parte B: Matriz de LEDs
+; =================================================================
 .include "m328pdef.inc"
 
 .equ ANCHO_MSG = 136         ; total columnas del mensaje (HOLIS con separadores)
@@ -8,7 +11,7 @@
 .equ UBRR_VALUE = (F_CPU/16/BAUD-1)
 
 .def fila      = r20       ; 0..7
-.def columnas  = r21       ; byte que se enviará a los pines de columna (bit7..bit0 -> col1..col8)
+.def columnas  = r21       ; byte que se enviará a los pines de columna
 .def indice    = r22
 .def flags     = r23
 .def deb_der   = r24
@@ -27,59 +30,30 @@
 .org 0x0000
     rjmp inicio
 
+; ===================== POWERPUFF GIRLS =====================
 colbuf:
 .db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
- ;p
 .db  0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b00110000, 0b00000000, 0b00000000
-;o
 .db 0b00000000, 0b00111110, 0b01000001, 0b01000001, 0b01000001, 0b01000001, 0b00111110, 0b00000000
-;w
 .db 0b00000000, 0b01111111, 0b00000001, 0b00000010, 0b00000100, 0b00000010, 0b01111111, 0b00000000
-;e
 .db 0b00000000, 0b00000000, 0b01111111, 0b01001001, 0b01001001, 0b01000001, 0b00000000, 0b00000000
-;r
 .db 0b00000000, 0b01111111, 0b01001000, 0b01001100, 0b01001010, 0b00110001, 0b00000000, 0b00000000
-;p
 .db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b00110000, 0b00000000, 0b00000000
-;u
 .db 0b00000000, 0b01111110, 0b00000001, 0b00000001, 0b00000001, 0b00000001, 0b01111110, 0b00000000
-;f
 .db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b01000000, 0b00000000, 0b00000000
-;f
 .db 0b00000000, 0b01111111, 0b01001000, 0b01001000, 0b01001000, 0b01000000, 0b00000000, 0b00000000
-
-;espacio
 .db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
-
-;g
 .db 0b00000000, 0b00111110, 0b01001001, 0b01001001, 0b01001001, 0b00100110, 0b00000000, 0b00000000
-;i
 .db 0b00000000, 0b00000000, 0b01000001, 0b01000001, 0b01111111, 0b01000001, 0b01000001, 0b00000000
-;r
 .db 0b00000000, 0b01111111, 0b01001000, 0b01001100, 0b01001010, 0b00110001, 0b00000000, 0b00000000
-;l
 .db 0b00000000, 0b01111111, 0b00000001, 0b00000001, 0b00000001, 0b00000001, 0b00000000, 0b00000000
-;s
 .db 0b00000000, 0b00000000, 0b00110010, 0b01001001, 0b01001001, 0b01001001, 0b00100110, 0b00000000
-
-;espacio
 .db 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000, 0b00000000
-
-Cara_Feliz:
-    .db 0x00, 0x24, 0x24, 0x00, 0x64, 0x3C, 0x00, 0x00
-
-Corazon:
-    .db 0x00, 0x66, 0xFF, 0xFF, 0x7E, 0x3C, 0x18, 0x00
 
 ; ===================== Strings para UART =====================
-WelcomeMsg:
-    .db "Bienvenido a la matriz LED",0x0D, 0x0A, 0
-
-MenuMsg:
-    .db "Seleccione una opcion:",0x0D, 0x0A, 0
-
-MenuOpciones:
-    .db "1: Mensaje desplazante 2: Carita Feliz 3: Corazon" 0x0D, 0x0A, 0
+WelcomeMsg: .db "Bienvenido a la matriz LED",0x0D, 0x0A, 0
+MenuMsg: .db "Seleccione una opcion:",0x0D, 0x0A, 0
+MenuOpciones: .db "1: Mensaje desplazante 2: Carita Feliz 3: Corazon" 0x0D, 0x0A, 0
 ; =================== Inicio ===================
 inicio:
     ; Stack
@@ -393,9 +367,8 @@ no_setbit:
     ret
 
 cargar_columnas:
-    ; --- PORTB (PB2..PB5) para col1..4 (bits7..4) ---
     in   r16, PORTB
-    andi r16, 0xC3                 ; limpia PB2..PB5 (0b11000011)
+    andi r16, 0xC3                 ; limpia PB2..PB5 
     clr  r17                       ; acumulador PB2..PB5
 
     ; bit7 (col1) -> PB2 (bit2): >>5
@@ -431,14 +404,13 @@ cargar_columnas:
      or   r16, r17
     out  PORTB, r16
 
-    ; --- PORTC (PC2..PC5) para col5..8 (bits3..0) ---
     in   r16, PORTC
-    andi r16, 0xC3                 ; limpia PC2..PC5
+    andi r16, 0xC3            
     mov  r17, columnas
-    andi r17, 0x0F                 ; bits3..0
+    andi r17, 0x0F            
     lsl  r17
-    lsl  r17                       ; <<2: bit3->PC5, bit2->PC4, bit1->PC3, bit0->PC2
-    andi r17, 0x3C                 ; sólo PC2..PC5
+    lsl  r17                    
+    andi r17, 0x3C             
     or   r16, r17
     out  PORTC, r16
     ret
@@ -501,6 +473,7 @@ retardo_lp:
     brne retardo_lp
     ret
 
+; ===================== UART =====================
 UART_CheckReceive:
     lds temp,UCSR0A
     sbrs temp,RXC0
