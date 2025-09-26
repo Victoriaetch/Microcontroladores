@@ -1,5 +1,5 @@
 ; =================================================================
-; Cinta transportadora con Punzonadora
+; Parte A: Cinta transportadora con Punzonadora
 ; =================================================================
 .include "m328pdef.inc"
 
