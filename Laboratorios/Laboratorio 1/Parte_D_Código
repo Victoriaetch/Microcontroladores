@@ -374,7 +374,9 @@ DELAY_MS_INNER_LOOP:
 ; ======================
 ; Mensajes adicionales
 ; ======================
-
+TrianguloMsg:  .db "Triangulo seleccionado",0x0D,0x0A,0
+CruzMsg:       .db "Cruz seleccionada",0x0D,0x0A,0
+AmbasMsg:      .db "Ambas figuras seleccionadas",0x0D,0x0A,0
 
 
 
