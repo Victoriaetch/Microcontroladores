@@ -22,6 +22,17 @@
 .org 0x0000
     jmp RESET
 
+;======================
+; Mensajes del menú
+;======================
+BienvenidoMsg: .db "Bienvenido al sistema de dibujo", 0x0D, 0x0A, 0
+MenuMsg .db "Seleccione una opcion: ", 0x0D, 0x0A, 0
+MenuOpciones .db "1: Triangulo  2: Cruz  T: Ambas figuras ", 0x0D, 0x0A, 0
+FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
+
+
+
+
 RESET:
     ; Inicia stack pointer
     ldi temp, high(RAMEND)
