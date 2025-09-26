@@ -129,8 +129,8 @@ inicio:
     ldi r16,0xFF
 
 main_loop:
-	rcall UART_CheckReceive
-
+	rcall UART_CheckReceive # Revisa si se recibieron datos por UART
+# Compara las opciones con las variable opcio_actual (que se encuentra en el UART)
     cpi opcion_actual,1
     breq scroll
     cpi opcion_actual,2
@@ -160,6 +160,7 @@ clr offset
 skip_offset:
     rjmp scroll_loop
 
+# Rutina para mostrar carita 
 cara:
 cara_loop:
     rcall UART_CheckReceive
@@ -171,6 +172,7 @@ cara_loop:
     rcall mostrar_carita
     rjmp cara_loop
 
+# Rutina para mostar corazon
 corazon:
 cor_loop:
     rcall UART_CheckReceive
@@ -182,6 +184,7 @@ cor_loop:
     rcall mostrar_corazon
     rjmp cor_loop
 
+#Rutina mostar carita (columna por columna)
 mostrar_carita:
     ; Columna 0
     ldi columnas, 0x3C
@@ -255,6 +258,8 @@ mostrar_carita:
     rcall apagar_columnas
 
     ret
+
+# Rutina mostar Corazon (columna potr columna)
 mostrar_corazon:
     ; Columna 0
     ldi columnas, 0x00
