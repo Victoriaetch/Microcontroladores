@@ -338,46 +338,37 @@ fin_str:
 MostrarMenu:
     ldi ZH, high(BienvenidoMsg<<1)
     ldi ZH, low(BienvenidoMsg<<1)
+	rcall UART_SendString
+    ldi ZH, high(MenuMsg<<1)
+    ldi ZH, low(MenuMsg<<1)
+	rcall UART_SendString
+    ldi ZH, high(MenuOpciones<<1)
+    ldi ZH, low(MenuOpciones<<1)
+	rcall UART_SendString
+	ret
 
 ; =================================================================
-; DELAYS
+; DELAY EN MILISEGUNDOS
 ; ================================================================
-DELAY_CORTO_FUNC:
-    ldi r24, low(DELAY_CORTO)
-    ldi r25, high(DELAY_CORTO)
-    rcall DELAY_MS
-    ret
-
-DELAY_MEDIO_FUNC:
-    ldi r24, low(DELAY_MEDIO)
-    ldi r25, high(DELAY_MEDIO)
-    rcall DELAY_MS
-    ret
-
-DELAY_LARGO_FUNC:
-    ldi r24, low(DELAY_LARGO)
-    ldi r25, high(DELAY_LARGO)
-    rcall DELAY_MS
-    ret
-
-; DELAY EN MILISEGUNDOS CH
 DELAY_MS:
     push r24
     push r25
     push r26
+    push r27
 DELAY_MS_LOOP:
     sbiw r24, 1
-    brne DELAY_MS_LOOP_INNER
+    brne DELAY_MS_INNER
+    pop r27
     pop r26
     pop r25
     pop r24
     ret
-
-DELAY_MS_LOOP_INNER:
-    ldi r26, 200
 DELAY_MS_INNER:
-    dec r26
-    brne DELAY_MS_INNER
+    ldi r26, low(16000/4)
+    ldi r27, high(16000/4)
+DELAY_MS_INNER_LOOP:
+    sbiw r26, 1
+    brne DELAY_MS_INNER_LOOP
     rjmp DELAY_MS_LOOP
 
 ; ======================
