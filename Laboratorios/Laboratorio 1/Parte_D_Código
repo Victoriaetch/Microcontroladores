@@ -198,7 +198,6 @@ MOVER_AL_CENTRO:
     ldi r25, high(3000)
     rcall DELAY_MS
     ret
-    ; estamos en la posición inicial para dibujo    
 
 SUBIR_SOLENOIDE_COMPLETO:
     ; Asegurarse de que el solenoide esté completamente subido
@@ -221,21 +220,33 @@ BAJAR_SOLENOIDE_COMPLETO:
     ret
 
 TRIANGULO:
-    ; Activar solenoide (bajar lápiz)
-    sbi PORTD, BAJA_SOLENOIDE
-    call DELAY_CORTO_FUNC
+    ; Activar solenoide para dibujar
+    call BAJAR_SOLENOIDE_COMPLETO
+
+    ldi r24, low(3000)
+    ldi r25, high(3000)
+    rcall DELAY_MS
 
     ; Dibujar triángulo
-    call MOVER_DERECHA_LARGO
-    call MOVER_ABAJO_LARGO
-    call MOVER_IZQUIERDA_LARGO
-    call MOVER_ARRIBA_LARGO
+    sbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+    cbi PORTD, MOV_ABAJO
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+	cbi PORTD, MOV_IZQUIERDA
+    rcall DELAY_MS
+
+    sbi PORTD, MOV_DERECHA
+    sbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
+    cbi PORTD, MOV_DERECHA
+    cbi PORTD, MOV_ARRIBA
+    rcall DELAY_MS
 
     ; Levantar lápiz
-    cbi PORTD, BAJA_SOLENOIDE
-    sbi PORTD, SUBIR_SOLENOIDE
-    call DELAY_CORTO_FUNC
-    cbi PORTD, SUBIR_SOLENOIDE
+    call SUBIR_SOLENOIDE_COMPLETO
     ret
 
 CRUZ:
