@@ -11,8 +11,8 @@
 .equ SUBIR_SOLENOIDE = 3    ; D3 - X1
 .equ MOV_ABAJO       = 4    ; D4 - X5
 .equ MOV_ARRIBA      = 5    ; D5 - X6
-.equ MOV_IZQUIERDA   = 7    ; D7 - X10
 .equ MOV_DERECHA     = 6    ; D6 - X7
+.equ MOV_IZQUIERDA   = 7    ; D7 - X10
 
 .def temp = r16
 .def contador = r17
@@ -22,17 +22,18 @@
 .org 0x0000
     jmp RESET
 
-;======================
-; Mensajes del menú
-;======================
+;=======================================================================
+; Mensajes del menú (Monitor serial)
+;=======================================================================
 BienvenidoMsg: .db "Bienvenido al sistema de dibujo", 0x0D, 0x0A, 0
 MenuMsg .db "Seleccione una opcion: ", 0x0D, 0x0A, 0
 MenuOpciones .db "1: Triangulo  2: Cruz  T: Ambas figuras ", 0x0D, 0x0A, 0
 FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
 
 
-
-
+;======================
+; Inicialización
+;======================
 RESET:
     ; Inicia stack pointer
     ldi temp, high(RAMEND)
@@ -40,23 +41,40 @@ RESET:
     ldi temp, low(RAMEND)
     out SPL, temp
 
+    ;Inicia UART
+    ldi temp, high (UBRR_VAL)
+    sts UBRR0H, temp
+    ldi temp, low (UBRR_VAL)
+    sts UBRR0L, temp
+    ldi temp, (1<<RXEN0)|(1<<TXEN0)
+    sts UCDR0B, temp
+    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
+    sts UCSR0C, temp
+
     ; Configurar puerto D como salida
-    ldi temp, MASK_CONTROL
+    ldi temp, 0b11111100
     out DDRD, temp
     ldi temp, 0x00
     out PORTD, temp
+    
+    ; LED de prueba en PB5
+    sbi DDRB, 5
+    cbi PORTB, 5
 
-    ; Inicia comunicación serial
-    call USART_Init
+    clr opcion_actual
 
-    ; Habilitar interrupciones globales
-    sei
+    ; Asegurar que el solenoide esté SUBIDO al inicio
+    call SUBIR_SOLENOIDE_COMPLETO
 
-    ; Posición inicial
-    call RESET_POSITION
+    ; Mostrar menú inicial
+    rcall MostrarMenu
 
-MAIN_LOOP:
-    rjmp MAIN_LOOP
+    ldi r24, low(3000)
+    ldi r25, high(3000)
+    rcall DELAY_MS
+
+MAIN:
+    rjmp MAIN
 
 USART_Init:
     ; Configurar baudios
