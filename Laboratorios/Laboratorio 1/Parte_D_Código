@@ -7,30 +7,20 @@
 .equ BAUD_RATE = 9600
 .equ UBRR_VAL = (F_CPU/16/BAUD_RATE)-1
 
-.equ BAJA_SOLENOIDE  = PD2    ; D2 - X0
-.equ SUBIR_SOLENOIDE = PD3    ; D3 - X1
-.equ MOV_ABAJO       = PD4    ; D4 - X5
-.equ MOV_ARRIBA      = PD5    ; D5 - X6
-.equ MOV_IZQUIERDA   = PD6    ; D6 - X7
-.equ MOV_DERECHA     = PD7    ; D7 - X10
-
-.equ MASK_CONTROL = (1<<BAJA_SOLENOIDE)|(1<<SUBIR_SOLENOIDE)|(1<<MOV_ABAJO)|(1<<MOV_ARRIBA)|(1<<MOV_IZQUIERDA)|(1<<MOV_DERECHA)
-
-; Tiempos de delay (ajustar según necesidades PROBAR)
-.equ DELAY_CORTO = 100
-.equ DELAY_MEDIO = 200
-.equ DELAY_LARGO = 500
+.equ BAJA_SOLENOIDE  = 2    ; D2 - X0
+.equ SUBIR_SOLENOIDE = 3    ; D3 - X1
+.equ MOV_ABAJO       = 4    ; D4 - X5
+.equ MOV_ARRIBA      = 5    ; D5 - X6
+.equ MOV_IZQUIERDA   = 7    ; D7 - X10
+.equ MOV_DERECHA     = 6    ; D6 - X7
 
 .def temp = r16
-.def comando = r17
-.def contador = r18
-.def temp2 = r19
+.def contador = r17
+.def opcion_actual = r18
 
 .cseg
 .org 0x0000
     jmp RESET
-.org URXCaddr
-    jmp USART_RXC
 
 RESET:
     ; Inicia stack pointer
