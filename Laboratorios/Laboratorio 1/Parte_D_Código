@@ -115,7 +115,31 @@ ejecutar_triangulo:
     rcall MostrarMenu
     rjmp MAIN
 
+ejecutar_cruz:
+    ; LED ON
+    sbi PORTB, 5
+    
+    ldi ZH, high(FiguraMsg<<1)
+    ldi ZL, low(FiguraMsg<<1)
+    rcall UART_SendString
+    ldi ZH, high(CruzMsg<<1)
+    ldi ZL, low(CruzMsg<<1)
+    rcall UART_SendString
 
+    call MOVER_AL_CENTRO
+    ldi r24, low(5000)
+    ldi r25, high(5000)
+    rcall DELAY_MS
+    call CRUZ
+    
+    ; Asegurar solenoide subido al finalizar
+    call SUBIR_SOLENOIDE_COMPLETO
+
+    ; LED OFF
+    cbi PORTB, 5
+    clr opcion_actual
+    rcall MostrarMenu
+    rjmp MAIN
 
 
 
