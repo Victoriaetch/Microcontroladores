@@ -37,39 +37,40 @@ FiguraMsg .db "Dibujando Figura...", 0x0D, 0x0A, 0
 ; =================================================================
 RESET:
     ; Inicia stack pointer
-    ldi temp, high(RAMEND)
-    out SPH, temp
-    ldi temp, low(RAMEND)
-    out SPL, temp
+    ldi temp, high(RAMEND)  ; Cargar la parte alta de la dirección final de la RAM
+    out SPH, temp           ; Configurar el SPH (Stack Pointer High)
+    ldi temp, low(RAMEND)   ; Cargar la parte baja de la RAM
+    out SPL, temp           ; Configurar el SPL (Stack Pointer Low)
 
     ;Inicia UART
-    ldi temp, high (UBRR_VAL)
+    ldi temp, high (UBRR_VAL)         ; Parte alta del divisor de baudios
     sts UBRR0H, temp
-    ldi temp, low (UBRR_VAL)
+    ldi temp, low (UBRR_VAL)          ; Parte baja del divisor de baudios
     sts UBRR0L, temp
-    ldi temp, (1<<RXEN0)|(1<<TXEN0)
+    ldi temp, (1<<RXEN0)|(1<<TXEN0)   ; Habilitar recepción y transmisión UART
     sts UCDR0B, temp
-    ldi temp, (1<<UCSZ01)|(1<<UCSZ00)
+    ldi temp, (1<<UCSZ01)|(1<<UCSZ00) ; Formato: 8 bits de datos, 1 bit de stop
     sts UCSR0C, temp
 
-    ; Configurar puerto D como salida
-    ldi temp, 0b11111100
+    ; Configurar puerto D como salida (pines para mover motores y solenoide)
+    ldi temp, 0b11111100  ; D2–D7 como salida, D0 y D1 quedan para RX/TX UART
     out DDRD, temp
-    ldi temp, 0x00
+    ldi temp, 0x00        ; Inicializar todos los pines en 0 (apagados)
     out PORTD, temp
     
     ; LED de prueba en PB5
     sbi DDRB, 5
-    cbi PORTB, 5
+    cbi PORTB, 5            ; Apagar LED al inicio
 
-    clr opcion_actual
+    clr opcion_actual       ; Limpiar la variable de opción seleccionada
 
     ; Asegurar que el solenoide esté SUBIDO al inicio
     call SUBIR_SOLENOIDE_COMPLETO
 
-    ; Mostrar menú inicial
+    ; Mostrar menú inicial en el monitor serie
     rcall MostrarMenu
 
+    ; Pequeña espera inicial (3 segundos)
     ldi r24, low(3000)
     ldi r25, high(3000)
     rcall DELAY_MS
@@ -78,87 +79,90 @@ RESET:
 ; LOOP PRINCIPAL
 ; =================================================================
 MAIN:
-    rcall UART_CheckReceive
-    cpi opcion_actual, '1'
-    breq ejecutar_triangulo
-    cpi opcion_actual, '2'
-    breq ejecutar_cruz
-    cpi opcion_actual, 'T'
-    breq ejecutar_ambas
-    cpi opcion_actual, 't'
-    breq ejecutar_ambas
+    rcall UART_CheckReceive     ; Verifica si llegó un dato por UART
+    cpi opcion_actual, '1'      ; ¿Se recibió un '1'?
+    breq ejecutar_triangulo     ; Sí → ir a rutina triángulo
+    cpi opcion_actual, '2'      ; ¿Se recibió un '2'?
+    breq ejecutar_cruz          ; Sí → ir a rutina cruz
+    cpi opcion_actual, 'T'      ; ¿Se recibió 'T'?
+    breq ejecutar_ambas         ; Sí → dibujar ambas figuras
+    cpi opcion_actual, 't'      ; ¿Se recibió 't'?
+    breq ejecutar_ambas         ; Sí → dibujar ambas figuras
 
-    rjmp MAIN
+    rjmp MAIN   ; Si no se recibió nada, volver a chequear
 
 ejecutar_triangulo:
-    ; LED ON
+    ; LED ON, indica que el plotter está dibujando
     sbi PORTB, 5
-    
-    ldi ZH, high(FiguraMsg<<1)
-    ldi ZL, low(FiguraMsg<<1)
-    rcall UART_SendString
-    ldi ZH, high(TrianguloMsg<<1)
-    ldi ZL, low(TrianguloMsg<<1)
-    rcall UART_SendString
 
-    call MOVER_AL_CENTRO
-    ldi r24, low(3000)
+    ; Enviar mensajes por UART
+    ldi ZH, high(FiguraMsg<<1)      ; Cargar dirección de "Dibujando Figura..."
+    ldi ZL, low(FiguraMsg<<1)
+    rcall UART_SendString           ; Imprimir mensaje
+    ldi ZH, high(TrianguloMsg<<1)   ; Cargar mensaje específico del triángulo
+    ldi ZL, low(TrianguloMsg<<1)
+    rcall UART_SendString           ; Imprimir mensaje
+
+    call MOVER_AL_CENTRO           ; Mover plotter al centro antes de dibujar
+    ldi r24, low(3000)             ; Delay de 3 segundos
     ldi r25, high(3000)
     rcall DELAY_MS
-    call TRIANGULO
-
+    call TRIANGULO                 ; Llamar a la subrutina que dibuja el triángulo
+ 
     ; Asegurar solenoide subido al finalizar
     call SUBIR_SOLENOIDE_COMPLETO
     
-    ; LED OFF
+    ; LED OFF → dibujo terminado
     cbi PORTB, 5
-    clr opcion_actual
-    rcall MostrarMenu
-    rjmp MAIN
+    clr opcion_actual    ; Limpiar opción para esperar nueva selección
+    rcall MostrarMenu    ; Mostrar menú otra vez
+    rjmp MAIN            ; Volver al loop principal
 
 ejecutar_cruz:
-    ; LED ON
+    ; LED ON, indica que el plotter está dibujando
     sbi PORTB, 5
     
-    ldi ZH, high(FiguraMsg<<1)
+    ldi ZH, high(FiguraMsg<<1)   ; "Dibujando Figura..."
     ldi ZL, low(FiguraMsg<<1)
     rcall UART_SendString
-    ldi ZH, high(CruzMsg<<1)
+    ldi ZH, high(CruzMsg<<1)     ; Mensaje específico de la cruz
     ldi ZL, low(CruzMsg<<1)
     rcall UART_SendString
 
-    call MOVER_AL_CENTRO
-    ldi r24, low(5000)
+    call MOVER_AL_CENTRO         ; Mover plotter al centro antes de dibujar
+    ldi r24, low(5000)           ; Delay de 5 segundos
     ldi r25, high(5000)
     rcall DELAY_MS
-    call CRUZ
+    call CRUZ                    ; Llamada a la subrutina que dibuja la cruz
     
     ; Asegurar solenoide subido al finalizar
     call SUBIR_SOLENOIDE_COMPLETO
 
-    ; LED OFF
+    ; LED OFF → dibujo terminado
     cbi PORTB, 5
-    clr opcion_actual
-    rcall MostrarMenu
-    rjmp MAIN
+    clr opcion_actual           ; Limpiar opción para próxima selección
+    rcall MostrarMenu           ; Mostrar menú otra vez
+    rjmp MAIN                   ; Volver al loop principal
 
 ejecutar_ambas:
-    ; LED ON
+    ; LED ON, indica que el plotter está dibujando
     sbi PORTB, 5
     
     ldi ZH, high(FiguraMsg<<1)
     ldi ZL, low(FiguraMsg<<1)
     rcall UART_SendString
-    ldi ZH, high(AmbasMsg<<1)
+    ldi ZH, high(AmbasMsg<<1)    ; Mensaje indicando que se dibujarán ambas figuras
     ldi ZL, low(AmbasMsg<<1)
     rcall UART_SendString
-    
+
+    ; Dibujar triángulo
     call MOVER_AL_CENTRO
     ldi r24, low(3000)
     ldi r25, high(3000)
     rcall DELAY_MS
     call TRIANGULO
-    
+
+    ; Volver al centro antes de dibujar la cruz
 	call MOVER_AL_CENTRO
     ldi r24, low(3000)
     ldi r25, high(3000)
@@ -170,9 +174,9 @@ ejecutar_ambas:
     
     ; LED OFF
     cbi PORTB, 5
-    clr opcion_actual
-    rcall MostrarMenu
-    rjmp MAIN
+    clr opcion_actual           ; Limpiar opción para próxima selección
+    rcall MostrarMenu           ; Mostrar menú otra vez
+    rjmp MAIN                   ; Volver al loop principal
 
 ; =================================================================
 ; SUBRUTINAS DE MOVIMIENTO
