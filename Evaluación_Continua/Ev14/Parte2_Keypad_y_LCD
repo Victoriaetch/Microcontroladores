@@ -1,0 +1,215 @@
+#include <avr/io.h>
+#include <util/delay.h>
+
+#define F_CPU 16000000UL 
+#define MAX_INPUT_LEN 32 
+
+// --- Pines LCD ---
+#define RS PD5
+#define EN PD7
+#define D4 PB0 
+#define D5 PB1 
+#define D6 PB2 
+#define D7 PB3 
+
+// Puerto de Control
+#define CONTROL_PORT PORTD 
+#define CONTROL_DDR DDRD
+// Puerto de Datos 
+#define DATA_PORT PORTB
+#define DATA_DDR DDRB
+
+// --- Keypad 4x4 ---
+#define ROWS 4
+#define COLS 4
+char keys[ROWS][COLS] = {
+    {'1','2','3','A'},
+    {'4','5','6','B'},
+    {'7','8','9','C'},
+    {'*','0','#','D'}
+};
+
+// ARRAYS DE PINES 
+uint8_t rowPins[ROWS] = {PC0, PC1, PC2, PC3}; 
+uint8_t colPins[COLS] = {PD2, PD3, PD4, PD6}; 
+
+// ------------------- PROTOTIPOS DE FUNCIONES -------------------
+void init_ports(void);
+void pulse_enable(void);
+// Funciones LCD (simplificadas)
+void LCD_cmd(uint8_t cmd);
+void LCD_write(uint8_t data);
+void LCD_init(void);
+void LCD_clear(void);
+void LCD_gotoxy(uint8_t x, uint8_t y);
+void LCD_print(const char* str);
+// Funciones Keypad
+char keypad_scan(void);
+
+// ------------------- IMPLEMENTACIÓN DE PUERTOS -------------------
+
+void init_ports(void) {
+    // Pines LCD
+    DATA_DDR |= 0x0F;                       // PB0-PB3 como salida
+    CONTROL_DDR |= (1 << RS) | (1 << EN);   // RS y EN como salida
+    
+    // Pines Keypad
+    DDRC |= (1 << PC0) | (1 << PC1) | (1 << PC2) | (1 << PC3);   // Filas como salidas
+    PORTC |= (1 << PC0) | (1 << PC1) | (1 << PC2) | (1 << PC3);  // Filas en HIGH
+    
+    // Columnas como entradas con Pull-up
+    DDRD &= ~((1 << PD2) | (1 << PD3) | (1 << PD4) | (1 << PD6)); 
+    PORTD |= (1 << PD2) | (1 << PD3) | (1 << PD4) | (1 << PD6); 
+}
+
+// ------------------- IMPLEMENTACIÓN DE FUNCIONES LCD -------------------
+
+// Pulso de habilitación (EN)
+void pulse_enable(void) {
+    CONTROL_PORT |= (1 << EN);
+    _delay_us(1);
+    CONTROL_PORT &= ~(1 << EN);
+    _delay_us(100); // Retardo pequeño
+}
+
+// Envia comando (4-bit)
+void LCD_cmd(uint8_t cmd) {
+    CONTROL_PORT &= ~(1 << RS); // RS = 0 para Comando
+    
+    // Envia MSB
+    DATA_PORT = (DATA_PORT & 0xF0) | (cmd >> 4); 
+    pulse_enable();
+    
+    // Envia LSB
+    DATA_PORT = (DATA_PORT & 0xF0) | (cmd & 0x0F);
+    pulse_enable();
+}
+
+// Envia dato (4-bit)
+void LCD_write(uint8_t data) {
+    CONTROL_PORT |= (1 << RS); // RS = 1 para Dato
+    
+    // Envia MSB
+    DATA_PORT = (DATA_PORT & 0xF0) | (data >> 4);
+    pulse_enable();
+    
+    // Envia LSB
+    DATA_PORT = (DATA_PORT & 0xF0) | (data & 0x0F);
+    pulse_enable();
+}
+
+void LCD_init(void) {
+    _delay_ms(50);
+    // Secuencia de inicialización 
+    LCD_cmd(0x33);
+    LCD_cmd(0x32);
+    LCD_cmd(0x28); // Función Set (4-bit, 2 líneas, 5x8)
+    LCD_cmd(0x0C); // Display ON, Cursor OFF 
+    LCD_cmd(0x06); // Entry Mode Set
+    LCD_cmd(0x01); // Limpiar Display
+    _delay_ms(2);
+    
+    // Configuración final (Display ON, Cursor ON)
+    LCD_cmd(0x0E);
+}
+
+void LCD_clear(void) {
+    LCD_cmd(0x01);
+    _delay_ms(2);
+}
+
+// Posiciona el cursor
+void LCD_gotoxy(uint8_t x, uint8_t y) {
+    uint8_t addr = (y == 0) ? (0x00 + x) : (0x40 + x);
+    LCD_cmd(0x80 | addr); 
+}
+
+void LCD_print(const char* str) {
+    while(*str) LCD_write(*str++);
+}
+
+// ------------------- IMPLEMENTACIÓN DE KEYPAD  -------------------
+
+char keypad_scan(void) {
+    char key = 0;
+    
+    for (uint8_t r = 0; r < ROWS; r++) {
+        // Fila actual en BAJO
+        PORTC &= ~(1 << rowPins[r]);
+        
+        // Lee las Columnas
+        for (uint8_t c = 0; c < COLS; c++) {
+            if (!(PIND & (1 << colPins[c]))) { 
+                key = keys[r][c];
+                
+                // Anti-rebote y espera de liberación
+                _delay_ms(50);
+                while (!(PIND & (1 << colPins[c]))); 
+                _delay_ms(50); 
+                
+                // Fila a HIGH antes de salir
+                PORTC |= (1 << rowPins[r]);
+                return key;
+            }
+        }
+        
+        // Fila a HIGH antes de la próxima iteración
+        PORTC |= (1 << rowPins[r]);
+    }
+    
+    return 0;
+}
+
+// ------------------- main -------------------
+
+int main(void) {
+    char key = 0;
+    char input_buffer[MAX_INPUT_LEN + 1] = ""; 
+    uint8_t buffer_index = 0;
+    
+    init_ports();
+    LCD_init();
+
+    LCD_gotoxy(0, 0);
+
+    while (1) {
+        key = keypad_scan(); 
+        
+        if (key != 0) {
+            
+            // Borrar
+            if (key == '*') {
+                LCD_clear(); 
+                buffer_index = 0;
+                memset(input_buffer, 0, MAX_INPUT_LEN + 1);
+                LCD_gotoxy(0, 0);
+                continue;
+            } 
+            
+            // Entrada Normal
+            if (buffer_index < MAX_INPUT_LEN) {
+                input_buffer[buffer_index] = key;
+                input_buffer[buffer_index + 1] = '\0';
+                
+                // Calcula la posición de impresión
+                uint8_t x = buffer_index % 16;
+                uint8_t y = buffer_index / 16;
+                
+                LCD_gotoxy(x, y); 
+                LCD_write(key);  
+
+                buffer_index++;
+                
+                // Moueve el cursor para la próxima entrada
+                uint8_t next_x = buffer_index % 16;
+                uint8_t next_y = buffer_index / 16;
+                
+                if (buffer_index <= MAX_INPUT_LEN) {
+                    LCD_gotoxy(next_x, next_y);
+                }
+            }
+        }
+    }
+    
+    return 0; 
+}
