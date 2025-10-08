@@ -3,8 +3,8 @@
 #define echoPin 4
 #define pwmPin 6
 
-#define MAX_DISTANCE_CM 400.0
-#define MIN_DISTANCE_CM 10.0
+#define MAX_DISTANCE_CM 200.0
+#define MIN_DISTANCE_CM 5.0
 
 void setup() {
   // Inicializa el pin Trig como salida
@@ -15,57 +15,38 @@ void setup() {
   pinMode(pwmPin, OUTPUT);
 }
 
+
 void loop() {
   float duration;
   float distance_cm;
-  int brightness_level;
   int pwm_value;
   
   // Limpia el pin Trig
   digitalWrite(trigPin, LOW); 
-  delayMicroseconds(2);
-  
+  delayMicroseconds(10);
   // Genera el pulso de activación (Trigger)
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
   
-  // Mide la duración del pulso de Eco
+  // Mide la duración del pulso de Echo
   duration = pulseIn(echoPin, HIGH);
   
   // Calcula la distancia en centímetros
   distance_cm = duration * 0.017;
   
-  // Evalúa la distancia para asignar el nivel de brillo (10 a 1)
-  if (distance_cm == 0 || distance_cm < MIN_DISTANCE_CM) {
-      // Asigna brillo máximo si está pegado o muy cerca
-      brightness_level = 10;
-  } 
-  else if (distance_cm > MAX_DISTANCE_CM) {
-      // Asigna brillo cero si está fuera de rango
-      brightness_level = 0;
-  }
-  else {
-      // Mapea la distancia (10-400cm) al nivel de brillo (10-1)
-      brightness_level = map(distance_cm, (int)MIN_DISTANCE_CM, (int)MAX_DISTANCE_CM, 10, 1);
-      
-      // Ajusta los límites del nivel
-      if (brightness_level < 1) brightness_level = 1;
-      if (brightness_level > 10) brightness_level = 10;
-  }
-  
-  // Evalúa el nivel para calcular el valor de PWM (0-255)
-  if (brightness_level == 0) {
-    // Asigna PWM cero si el nivel es cero
-    pwm_value = 0;
-  } else {
-    // Calcula el valor final de PWM (25-255)
-    pwm_value = map(brightness_level, 1, 10, 25, 255);
-  }
+  // Limitar distancia dentro de rango
+if (distance_cm < MIN_DISTANCE_CM) distance_cm = MIN_DISTANCE_CM;
+if (distance_cm > MAX_DISTANCE_CM) distance_cm = MAX_DISTANCE_CM;
 
-  // Aplica el valor de PWM al pin del LED
+// Aplicar función cuadrática para sensibilidad cercana
+float factor = 2.0 - (distance_cm - MIN_DISTANCE_CM) / (MAX_DISTANCE_CM - MIN_DISTANCE_CM);
+factor = factor * factor;  // cuadrática, más cambios cercanos
+  
+ // Mapear factor a PWM (25-255)
+  pwm_value = 25 + factor * (255 - 25);
+  
   analogWrite(pwmPin, pwm_value);
   
-  // Espera medio segundo antes de la siguiente lectura
-  delay(500);
+  delay(200);  
 }
