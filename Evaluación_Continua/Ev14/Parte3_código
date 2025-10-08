@@ -1,0 +1,137 @@
+#ifndef F_CPU
+#define F_CPU 16000000UL
+#endif
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+
+#define RS PB0
+#define EN PB1
+#define D4 PD4
+#define D5 PD5
+#define D6 PD6
+#define D7 PD7
+#define PC0 0
+
+// Inicialización del LCD
+void LCD_EnablePulse(void) {
+	PORTB |= (1 << EN);
+	_delay_us(1);
+	PORTB &= ~(1 << EN);
+	_delay_us(100);
+}
+
+void LCD_Send4Bits_Aligned(uint8_t nibble) {
+	PORTD = (PORTD & 0x0F) | (nibble << 4);
+}
+
+void LCD_Cmd(unsigned char cmd) {
+	LCD_Send4Bits_Aligned(cmd >> 4);
+	PORTB &= ~(1 << RS);
+	LCD_EnablePulse();
+	LCD_Send4Bits_Aligned(cmd & 0x0F);
+	LCD_EnablePulse();
+	_delay_ms(2);
+}
+
+void LCD_Char(unsigned char data) {
+	LCD_Send4Bits_Aligned(data >> 4);
+	PORTB |= (1 << RS);
+	LCD_EnablePulse();
+	LCD_Send4Bits_Aligned(data & 0x0F);
+	LCD_EnablePulse();
+	_delay_ms(2);
+}
+
+void LCD_Init(void) {
+	DDRB |= (1 << RS) | (1 << EN);
+	DDRD |= (1 << D4) | (1 << D5) | (1 << D6) | (1 << D7);
+	_delay_ms(20);
+
+	LCD_Send4Bits_Aligned(0x03); PORTB &= ~(1 << RS); LCD_EnablePulse();
+	_delay_ms(5);
+	LCD_Send4Bits_Aligned(0x03); PORTB &= ~(1 << RS); LCD_EnablePulse();
+	_delay_us(150);
+	LCD_Send4Bits_Aligned(0x03); PORTB &= ~(1 << RS); LCD_EnablePulse();
+	
+	LCD_Cmd(0x02);
+	LCD_Cmd(0x28);
+	LCD_Cmd(0x0C);
+	LCD_Cmd(0x06);
+	LCD_Cmd(0x01);
+	_delay_ms(2);
+}
+
+void LCD_String(const char *str) {
+	while (*str) LCD_Char(*str++);
+}
+
+void LCD_Clear(void) {
+	LCD_Cmd(0x01);
+	_delay_ms(2);
+}
+
+// Incialización del ADC
+void adc_init(void) {
+	ADMUX |= (1<<REFS0);
+	ADMUX &= ~(1<<ADLAR);
+	ADCSRA |= (1<<ADPS2) | (1<<ADPS1);
+	
+	ADCSRA |= (1<<ADEN);
+}
+
+uint16_t adc_read(uint8_t canal) {
+	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
+	ADCSRA |= (1 << ADSC);
+	while (ADCSRA & (1 << ADSC));
+	return ADC;
+}
+
+// Tablas de equivalencias 
+char detectar_tecla(uint16_t valor) {
+	
+	if (valor > 950) return ' ';
+	else if (valor > 908) return 'A'; // ~ 913
+	else if (valor > 895) return 'B'; // ~ 902
+	else if (valor > 889) return 'C'; // ~ 892
+	else if (valor > 860) return 'D'; // ~ 886
+	else if (valor > 830) return '3'; // ~ 837
+	else if (valor > 826) return '6'; // ~ 831
+	else if (valor > 819) return '9'; // ~ 820
+	else if (valor > 800) return '*'; // ~ 814
+	else if (valor > 770) return '2'; // ~ 773
+	else if (valor > 762) return '5'; // ~ 767
+	else if (valor > 756) return '8'; // ~ 759
+	else if (valor > 740) return '0'; // ~ 755
+	else if (valor > 718) return '1'; // ~ 720
+	else if (valor > 710) return '4'; // ~ 714
+	else if (valor > 705) return '7'; // ~ 708
+	else if (valor > 690) return '#'; // ~ 702
+
+	return ' ';
+}
+
+int main(void) {
+	LCD_Init();
+	adc_init();
+
+	LCD_String("Teclado listo");
+	_delay_ms(1000);
+	LCD_Clear();
+
+	char tecla;
+	uint16_t valor;
+
+	while (1) {
+		valor = adc_read(0);
+		tecla = detectar_tecla(valor);
+
+		LCD_Clear();
+		LCD_String("Tecla: ");
+		LCD_Char(tecla);
+		_delay_ms(400);
+	}
+}
