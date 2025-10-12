@@ -1,0 +1,488 @@
+#include <avr/io.h>
+#include <util/delay.h>
+#include <math.h>
+#include <stdio.h>
+
+// Definición de pines del puerto D
+#define BAJA_SOLENOIDE  2    // Pin PD2: activa el solenoide hacia abajo
+#define SUBIR_SOLENOIDE 3    // Pin PD3: activa el solenoide hacia arriba
+#define MOV_ABAJO       4    // Pin PD4: motor en dirección abajo
+#define MOV_ARRIBA      5    // Pin PD5: motor en dirección arriba
+#define MOV_DERECHA     6    // Pin PD6: motor en dirección derecha
+#define MOV_IZQUIERDA   7    // Pin PD7: motor en dirección izquierda
+
+#define F_CPU 16000000UL
+#define BAUD 9600
+#define UBRR_VAL ((F_CPU + 8UL * BAUD) / (16UL * BAUD) - 1)
+
+
+// Prototipos de funciones
+void inicializar_puertos(void);
+void inicializar_serial(void);
+char leer_comando_serial(void);
+void dibujar_triangulo(void);
+void dibujar_cruz(void);
+void dibujar_circulo(void);
+void dibujar_todos(void);
+void procesar_comando(char comando);
+
+
+// Función para printf
+int uart_putchar(char c, FILE *stream);
+
+FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
+
+
+// Función principal
+int main(void) {
+	inicializar_puertos();  // FALTABA ESTA LLAMADA!!!
+	inicializar_serial();
+	
+	_delay_ms(1000); // Pequeño delay para estabilizar
+
+	
+	stdout = &uart_output;  // ¡IMPORTANTE: Configurar stdout para printf!
+
+	printf("Plotter inicializado exitosamente\n");
+	printf("Comandos: 1=Triangulo, 2=Cruz, 3=Circulo, t=Todos, g=Gato\n");
+	
+	while(1) {
+		char comando = leer_comando_serial();
+		if(comando != 0) {
+			procesar_comando(comando);
+		}
+	}
+	
+	return 0;
+}
+
+// Inicialización de puertos
+void inicializar_puertos(void) {
+    DDRD = 0b11111100; // deja PD0 y PD1 como entradas (UART)
+	PORTD = 0x00; // Inicializar todos los pines en bajo
+}
+
+// Inicialización comunicación serial
+void inicializar_serial(void) {
+	
+	 UBRR0H = (unsigned char)(UBRR_VAL  >> 8);
+	 UBRR0L = (unsigned char)UBRR_VAL ;
+	 
+	 // Habilitar transmisor y receptor
+	 UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+	 
+	 // Configurar formato: 8 bits de datos, 1 bit de stop, sin paridad
+	 UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+ }
+
+// Leer comando desde el monitor serial MEJORADA
+char leer_comando_serial(void) {
+	// Esperar hasta que llegue un dato
+	while (!(UCSR0A & (1 << RXC0)));
+	return UDR0;
+}
+
+// Función para printf
+int uart_putchar(char c, FILE *stream) {
+	if (c == '\n') {
+		uart_putchar('\r', stream);
+	}
+	
+	// Esperar hasta que el buffer de transmisión esté vacío
+	while (!(UCSR0A & (1 << UDRE0)));
+	
+	// Enviar carácter
+	UDR0 = c;
+}
+
+// Triángulo 
+void dibujar_triangulo(void) {
+	printf("Dibujando triangulo...\n");
+	
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(500);
+	
+	// Cateto vertical (abajo)
+	for(int i = 0; i < 100; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	
+	// Hipotenusa (arriba-izquierda)
+	for(int i = 0; i < 90; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+	
+	// Cateto horizontal (derecha)
+	for(int i = 0; i < 100; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+		
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(500);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	
+	// Ir al centro
+	for(int i = 0; i < 100; i++) {
+			PORTD |= (1 << MOV_IZQUIERDA);
+			_delay_ms(700);
+			PORTD &= ~(1 << MOV_IZQUIERDA);
+			_delay_ms(200);
+		}
+	
+	_delay_ms(500);
+	printf("Triangulo completado\n");
+}
+
+// Cruz
+void dibujar_cruz(void) {
+	printf("Dibujando cruz...\n");
+	
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(100);
+	
+	// Línea vertical hacia abajo
+	for(int i = 0; i < 100; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	
+	// Volver al centro (arriba)
+	for(int i = 0; i < 50; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	// Línea horizontal completa (izquierda + derecha)
+	for(int i = 0; i < 50; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for(int i = 0; i < 100; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+	
+	for(int i = 0; i < 50; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(500);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	
+	// Ir al centro
+	for(int i = 0; i < 120; i++) {
+	PORTD |= (1 << MOV_IZQUIERDA);
+	_delay_ms(1000);
+	PORTD &= ~(1 << MOV_IZQUIERDA);
+	_delay_ms(1000);
+	}
+		
+	
+	printf("Cruz completada\n");
+}
+
+void dibujar_circulo(void) {
+	printf("Dibujando círculo...\n");
+
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(500);
+
+	const float radio = 50.0;     // radio en "pasos"
+	const int puntos = 150;
+
+	float x_ant = radio, y_ant = 0;
+
+	for (int i = 1; i <= puntos; i++) {
+		float angulo = 2 * M_PI * i / puntos;
+		float x = radio * cos(angulo);
+		float y = radio * sin(angulo);
+
+		int dx = round(x - x_ant);
+		int dy = round(y - y_ant);
+
+		// Mover en X
+		if (dx > 0) {
+			for (int j = 0; j < dx; j++) {
+				PORTD |= (1 << MOV_DERECHA);
+				_delay_ms(200);
+				PORTD &= ~(1 << MOV_DERECHA);
+				_delay_ms(200);
+			}
+			} else if (dx < 0) {
+			for (int j = 0; j < -dx; j++) {
+				PORTD |= (1 << MOV_IZQUIERDA);
+				_delay_ms(200);
+				PORTD &= ~(1 << MOV_IZQUIERDA);
+				_delay_ms(200);
+			}
+		}
+
+		// Mover en Y
+		if (dy > 0) {
+			for (int j = 0; j < dy; j++) {
+				PORTD |= (1 << MOV_ABAJO);
+				_delay_ms(200);
+				PORTD &= ~(1 << MOV_ABAJO);
+				_delay_ms(200);
+			}
+			} else if (dy < 0) {
+			for (int j = 0; j < -dy; j++) {
+				PORTD |= (1 << MOV_ARRIBA);
+				_delay_ms(200);
+				PORTD &= ~(1 << MOV_ARRIBA);
+				_delay_ms(200);
+			}
+		}
+
+		x_ant = x;
+		y_ant = y;
+	}
+
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+				_delay_ms(1000);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+
+	printf("Círculo completado\n");
+}
+
+
+//DIBUJO GATO. MEJORAR!!
+void dibujar_gato(void) {
+	printf("Dibujando gato...\n");
+	
+	// Ajustar este valor según la calibración
+	int pasos_por_cm = 25; // EJEMPLO: si 1 cm = 25 pasos
+	
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(300);
+
+	// 1) 2 cm derecha
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+
+	// 2) 5 cm abajo
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	// 3) 1 cm derecha
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+
+	// 4) 2 cm arriba
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	// 5) 1 cm arriba + 1 cm derecha (diagonal)
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	// 6) 1 cm arriba + 1 cm izquierda (diagonal)
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+
+	// 7) 3 cm arriba
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	// 8) 1 cm abajo + 1 cm derecha
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	// 9) 1 cm derecha
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+
+	// 10) 1 cm arriba + 1 cm derecha
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	// 11) 3 cm abajo
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	// 12) 1 cm abajo + 1 cm izquierda
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+
+	// 13) 1 cm abajo + 1 cm derecha
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	// 14) 3 cm abajo
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	// 15) 5 cm izquierda
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+
+	// 16) 5 cm arriba
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	// 17) 1 cm izquierda
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+
+	// 18) 1 cm arriba
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(500);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+
+	printf("Gato completado!\n");
+}
+
+void dibujar_todos(void) {
+	dibujar_triangulo();
+	_delay_ms(1000);
+	
+	dibujar_cruz();
+	_delay_ms(1000);
+	
+	dibujar_circulo();
+	_delay_ms(1000);
+	
+	dibujar_gato();
+	_delay_ms(1000);
+}
+
+
+// Procesar comando del usuario
+void procesar_comando(char comando) {
+	switch(comando) {
+		
+		case '1':
+		dibujar_triangulo();
+		break;
+		
+		case '2':
+		dibujar_cruz();
+		break;
+		
+		case '3':
+		dibujar_circulo();
+		break;
+		
+		case 't':
+		case 'T':
+		dibujar_todos();
+		break;
+		
+		case 'g':
+		case 'G':
+		dibujar_gato();
+		break;
+
+		default:
+		printf("Comando no reconocido: %c\n", comando);
+		printf("Usar: 1=Triangulo, 2=Cruz, 3=Circulo, G= Gato t=Todos, \n");
+		break;
+	}
+}
+
