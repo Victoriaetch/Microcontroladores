@@ -54,38 +54,50 @@ char keypad_getkey(void) {
 
 uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
 	char clave_ingresada[MAX_CLAVE+1];
-	uint8_t index = 0;
+	uint8_t index;
 	char key;
 
-	twi_lcd_clear();
-	twi_lcd_cmd(0x80);
-	twi_lcd_msg("Ingrese clave:");
-	twi_lcd_cmd(0xC0);
+	while(1) {  
+		index = 0;
+		memset(clave_ingresada, 0, MAX_CLAVE+1);
+		twi_lcd_clear();
+		twi_lcd_cmd(0x80);
+		twi_lcd_msg("Ingrese clave:");
+		twi_lcd_cmd(0xC0);
 
-	while(1) {
-		key = keypad_getkey();
-		if(key){
-			if(key=='#') break;  // confirma
-			if(key=='A'){         // borra
-				if(index>0) index--;
-				clave_ingresada[index]='\0';
+		while(1) { 
+			key = keypad_getkey();
+			if(key) {
+				if(key == '#') { // confirmar
+					if(index < 4){ // mínimo 4 dígitos
+						twi_lcd_clear();
+						twi_lcd_cmd(0x80);
+						twi_lcd_msg("Min 4 digitos");
+						_delay_ms(1500);
+						break;  // reinicia ingreso
+					}
+					// comparar clave
+					if(strcmp(clave_ingresada, clave_guardada) == 0) return 1;
+					else return 0;
+				}
+
+				if(key == 'A') {  // borrar
+					if(index > 0) index--;
+					clave_ingresada[index] = '\0';
+				}
+				else if(index < 6) {  // máximo 6 dígitos
+					clave_ingresada[index++] = key;
+					clave_ingresada[index] = '\0';
+				}
+				twi_lcd_cmd(0xC0);
 				twi_lcd_clear();
 				twi_lcd_cmd(0x80);
 				twi_lcd_msg("Ingrese clave:");
 				twi_lcd_cmd(0xC0);
-				for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
-				} else if(index<max_len){
-				clave_ingresada[index++] = key;
-				clave_ingresada[index]='\0';
-				twi_lcd_cmd(0xC0);
-				for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+				for(uint8_t i = 0; i < index; i++) twi_lcd_msg("*");
 			}
 		}
 	}
-
-	// Comparar con la clave guardada
-	if(strcmp(clave_ingresada, clave_guardada)==0) return 1; // correcta
-	return 0; // incorrecta
 }
 
 void cambiar_clave(char *clave_guardada, uint8_t max_len) {
@@ -103,16 +115,11 @@ void cambiar_clave(char *clave_guardada, uint8_t max_len) {
 	while(1){
 		key = keypad_getkey();
 		if(key){
-			if(key=='#') break;  // confirmar
-			if(key=='A'){         // borrar
-				if(index>0) index--;
-				clave_actual[index]='\0';
-				} else if(index<max_len){
-				clave_actual[index++] = key;
-				clave_actual[index]='\0';
-			}
-
-			twi_lcd_cmd(0xC0);
+			if(key == '#') break;  // confirmar
+			if(key == 'A'){ if(index>0) index--; clave_actual[index]='\0'; }
+			else if(index < max_len) { clave_actual[index++] = key; clave_actual[index]='\0'; }
+            
+            twi_lcd_cmd(0xC0);
 			twi_lcd_clear();
 			twi_lcd_cmd(0x80);
 			twi_lcd_msg("Clave actual:");
@@ -121,56 +128,73 @@ void cambiar_clave(char *clave_guardada, uint8_t max_len) {
 		}
 	}
 
-	// Verificar
-	if(strcmp(clave_actual, clave_guardada)!=0){
+	// Verifica clave actual
+	if(strcmp(clave_actual, clave_guardada) != 0){
 		twi_lcd_clear();
 		twi_lcd_cmd(0x80);
 		twi_lcd_msg("Clave incorrecta");
 		_delay_ms(2000);
 		return;
 	}
+    // Ingresa clave nueva
+	while(1) { 
+		index = 0;
+		memset(clave_nueva, 0, MAX_CLAVE+1);
+		twi_lcd_clear();
+		twi_lcd_cmd(0x80);
+		twi_lcd_msg("Nueva clave:");
+		twi_lcd_cmd(0xC0);
 
-	index = 0;
-	twi_lcd_clear();
-	twi_lcd_cmd(0x80);
-	twi_lcd_msg("Nueva clave:");
-	twi_lcd_cmd(0xC0);
+		while(1){ 
+			key = keypad_getkey();
+			if(key){
+				if(key == '#'){
+					if(index < 4){ // mínimo
+						twi_lcd_clear();
+						twi_lcd_cmd(0x80);
+						twi_lcd_msg("Min 4 digitos");
+						_delay_ms(1500);
+						break; // reinicia ingreso
+					}
+					// clave válida, se guarda
+					strcpy(clave_guardada, clave_nueva);
+					guardar_clave_EEPROM(clave_guardada);
+					twi_lcd_clear();
+					twi_lcd_cmd(0x80);
+					twi_lcd_msg("Clave cambiada!");
+					_delay_ms(2000);
+					return;
+				}
 
-	while(1){
-		key = keypad_getkey();
-		if(key){
-			if(key=='#') break;  // confirmar
-			if(key=='A'){ if(index>0) index--; clave_nueva[index]='\0'; }
-			else if(index<max_len){ clave_nueva[index++] = key; clave_nueva[index]='\0'; }
-
-			twi_lcd_cmd(0xC0);
-			twi_lcd_clear();
-			twi_lcd_cmd(0x80);
-			twi_lcd_msg("Nueva clave:");
-			twi_lcd_cmd(0xC0);
-			for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+				if(key == 'A'){ if(index>0) index--; clave_nueva[index]='\0'; }
+				else if(index < 6){ 
+					clave_nueva[index++] = key;
+					clave_nueva[index]='\0';
+				}
+				twi_lcd_cmd(0xC0);
+				twi_lcd_clear();
+				twi_lcd_cmd(0x80);
+				twi_lcd_msg("Nueva clave:");
+				twi_lcd_cmd(0xC0);
+				for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+			}
 		}
 	}
-
-	// Guardar en EEPROM
-	strcpy(clave_guardada, clave_nueva);
-	guardar_clave_EEPROM(clave_guardada);
-
-	twi_lcd_clear();
-	twi_lcd_cmd(0x80);
-	twi_lcd_msg("Clave cambiada!");
-	_delay_ms(2000);
 }
-
 
 int main(void){
 	char clave_guardada[MAX_CLAVE+1] = {0};
 	char opcion = 0;
+	uint8_t intentos_fallidos = 0;
 
 	// Inicializaciones
 	twi_init();
 	twi_lcd_init();
 	keypad_init();
+
+    // Configurar LEDs y buzzer
+	DDRB |= (1<<PB5) | (1<<PB4) | (1<<PB6); // PB5=verde, PB4=rojo, PB6=buzzer
+	PORTB &= ~((1<<PB5)|(1<<PB4)|(1<<PB6)); // apagar todos al inicio
 
 	// Leer la clave de la EEPROM
 	leer_clave_EEPROM(clave_guardada);
@@ -205,18 +229,38 @@ int main(void){
 				twi_lcd_clear();
 				twi_lcd_cmd(0x80);
 				twi_lcd_msg("Clave correcta!");
+				PORTB |= (1<<PB5);       // LED verde prendido
+				PORTB &= ~((1<<PB4)|(1<<PB6)); // LED rojo y buzzer apagados
+				intentos_fallidos = 0;   // resetear contador
 				} else {
 				twi_lcd_clear();
 				twi_lcd_cmd(0x80);
 				twi_lcd_msg("Clave incorrecta");
+				PORTB |= (1<<PB4);       // LED rojo prendido
+				PORTB &= ~(1<<PB5);      // LED verde apagado
+				intentos_fallidos++;     // sumar intento fallido
+
+				// Si llega a 3 intentos fallidos se activa el buzzer
+				if(intentos_fallidos >= 3){
+					PORTB |= (1<<PB6);    // buzzer prendido
+					twi_lcd_clear();
+					twi_lcd_cmd(0x80);
+					twi_lcd_msg("Clave incorrecta");
+					twi_lcd_cmd(0xC0);
+					twi_lcd_msg("Alarma activada");
+					_delay_ms(3500);      // sonar 3,5 segundos
+					PORTB &= ~(1<<PB6);   // buzzer apagado
+					intentos_fallidos = 0; // resetear contador
+				}
 			}
 			_delay_ms(2000);
+			// Apagar LEDs
+			PORTB &= ~((1<<PB5)|(1<<PB4));
 		}
-
 		else if(opcion=='2'){
 			cambiar_clave(clave_guardada, MAX_CLAVE);
 		}
 
-		_delay_ms(500);
+		_delay_ms(500); // retardo antes de volver al menú
 	}
 }
