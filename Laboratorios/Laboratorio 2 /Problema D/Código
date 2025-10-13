@@ -1,4 +1,4 @@
-#Estructura incial, faltan comentarios
+//Estructura incial, faltan comentarios
 
 #define PCF8574 0x27
 #define F_CPU 16000000UL
