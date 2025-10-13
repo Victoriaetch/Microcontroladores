@@ -1,0 +1,222 @@
+#Estructura incial, falta buzzer, leds y comentarios
+
+#define PCF8574 0x27
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <string.h>
+#include <avr/eeprom.h>
+#include "twi_lcd.h"
+
+#define EEPROM_ADDR_CLAVE 0x00
+#define MAX_CLAVE 8
+#define ROWS 4
+#define COLS 4
+
+char keys[ROWS][COLS] = {
+	{'1','2','3','A'},
+	{'4','5','6','B'},
+	{'7','8','9','C'},
+	{'*','0','#','D'}
+};
+uint8_t rowPins[ROWS] = {PC0, PC1, PC2, PC3};
+uint8_t colPins[COLS] = {PD2, PD3, PD4, PD6};
+
+void guardar_clave_EEPROM(char *clave) {
+	eeprom_write_block((const void*)clave, (void*)EEPROM_ADDR_CLAVE, MAX_CLAVE);
+}
+
+void leer_clave_EEPROM(char *clave) {
+	eeprom_read_block((void*)clave, (const void*)EEPROM_ADDR_CLAVE, MAX_CLAVE);
+}
+
+void keypad_init(void) {
+	DDRC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
+	PORTC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
+	DDRD &= ~((1<<PD2)|(1<<PD3)|(1<<PD4)|(1<<PD6));
+	PORTD |= (1<<PD2)|(1<<PD3)|(1<<PD4)|(1<<PD6);
+}
+
+char keypad_getkey(void) {
+	for (uint8_t r=0;r<ROWS;r++){
+		PORTC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
+		PORTC &= ~(1<<rowPins[r]);
+		for(uint8_t c=0;c<COLS;c++){
+			if(!(PIND & (1<<colPins[c]))){
+				_delay_ms(50);
+				while(!(PIND & (1<<colPins[c])));
+				return keys[r][c];
+			}
+		}
+	}
+	return 0;
+}
+
+uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
+	char clave_ingresada[MAX_CLAVE+1];
+	uint8_t index = 0;
+	char key;
+
+	twi_lcd_clear();
+	twi_lcd_cmd(0x80);
+	twi_lcd_msg("Ingrese clave:");
+	twi_lcd_cmd(0xC0);
+
+	while(1) {
+		key = keypad_getkey();
+		if(key){
+			if(key=='#') break;  // confirma
+			if(key=='A'){         // borra
+				if(index>0) index--;
+				clave_ingresada[index]='\0';
+				twi_lcd_clear();
+				twi_lcd_cmd(0x80);
+				twi_lcd_msg("Ingrese clave:");
+				twi_lcd_cmd(0xC0);
+				for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+				} else if(index<max_len){
+				clave_ingresada[index++] = key;
+				clave_ingresada[index]='\0';
+				twi_lcd_cmd(0xC0);
+				for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+			}
+		}
+	}
+
+	// Comparar con la clave guardada
+	if(strcmp(clave_ingresada, clave_guardada)==0) return 1; // correcta
+	return 0; // incorrecta
+}
+
+void cambiar_clave(char *clave_guardada, uint8_t max_len) {
+	char clave_actual[MAX_CLAVE+1] = {0};
+	char clave_nueva[MAX_CLAVE+1] = {0};
+	uint8_t index;
+	char key;
+
+	index = 0;
+	twi_lcd_clear();
+	twi_lcd_cmd(0x80);
+	twi_lcd_msg("Clave actual:");
+	twi_lcd_cmd(0xC0);
+
+	while(1){
+		key = keypad_getkey();
+		if(key){
+			if(key=='#') break;  // confirmar
+			if(key=='A'){         // borrar
+				if(index>0) index--;
+				clave_actual[index]='\0';
+				} else if(index<max_len){
+				clave_actual[index++] = key;
+				clave_actual[index]='\0';
+			}
+
+			twi_lcd_cmd(0xC0);
+			twi_lcd_clear();
+			twi_lcd_cmd(0x80);
+			twi_lcd_msg("Clave actual:");
+			twi_lcd_cmd(0xC0);
+			for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+		}
+	}
+
+	// Verificar
+	if(strcmp(clave_actual, clave_guardada)!=0){
+		twi_lcd_clear();
+		twi_lcd_cmd(0x80);
+		twi_lcd_msg("Clave incorrecta");
+		_delay_ms(2000);
+		return;
+	}
+
+	index = 0;
+	twi_lcd_clear();
+	twi_lcd_cmd(0x80);
+	twi_lcd_msg("Nueva clave:");
+	twi_lcd_cmd(0xC0);
+
+	while(1){
+		key = keypad_getkey();
+		if(key){
+			if(key=='#') break;  // confirmar
+			if(key=='A'){ if(index>0) index--; clave_nueva[index]='\0'; }
+			else if(index<max_len){ clave_nueva[index++] = key; clave_nueva[index]='\0'; }
+
+			twi_lcd_cmd(0xC0);
+			twi_lcd_clear();
+			twi_lcd_cmd(0x80);
+			twi_lcd_msg("Nueva clave:");
+			twi_lcd_cmd(0xC0);
+			for(uint8_t i=0;i<index;i++) twi_lcd_msg("*");
+		}
+	}
+
+	// Guardar en EEPROM
+	strcpy(clave_guardada, clave_nueva);
+	guardar_clave_EEPROM(clave_guardada);
+
+	twi_lcd_clear();
+	twi_lcd_cmd(0x80);
+	twi_lcd_msg("Clave cambiada!");
+	_delay_ms(2000);
+}
+
+
+int main(void){
+	char clave_guardada[MAX_CLAVE+1] = {0};
+	char opcion = 0;
+
+	// Inicializaciones
+	twi_init();
+	twi_lcd_init();
+	keypad_init();
+
+	// Leer la clave de la EEPROM
+	leer_clave_EEPROM(clave_guardada);
+
+	// Si está vacía (0xFF), inicializar con "1234"
+	if(clave_guardada[0]==0xFF){
+		strcpy(clave_guardada,"1234");
+		guardar_clave_EEPROM(clave_guardada);
+	}
+
+	// bienvenida
+	twi_lcd_clear();
+	twi_lcd_cmd(0x80);
+	twi_lcd_msg("Bienvenido!");
+	_delay_ms(3000);
+	twi_lcd_clear();
+
+	while(1){
+		// Menú
+		twi_lcd_clear();
+		twi_lcd_cmd(0x80);
+		twi_lcd_msg("1-Ingresar clave");
+		twi_lcd_cmd(0xC0);
+		twi_lcd_msg("2-Cambiar clave");
+
+		do{
+			opcion = keypad_getkey();
+		}while(opcion!='1' && opcion!='2');
+
+		if(opcion=='1'){
+			if(ingresar_clave(clave_guardada, MAX_CLAVE)){
+				twi_lcd_clear();
+				twi_lcd_cmd(0x80);
+				twi_lcd_msg("Clave correcta!");
+				} else {
+				twi_lcd_clear();
+				twi_lcd_cmd(0x80);
+				twi_lcd_msg("Clave incorrecta");
+			}
+			_delay_ms(2000);
+		}
+
+		else if(opcion=='2'){
+			cambiar_clave(clave_guardada, MAX_CLAVE);
+		}
+
+		_delay_ms(500);
+	}
+}
