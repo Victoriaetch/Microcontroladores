@@ -1,4 +1,4 @@
-// Estas librerias se utilizaron en el codigo, para su implementacion se añaden en la carpeta del proyecto en microchip (estas librerias fueron proporcionadas en por los profesores)
+// Estas librerias se utilizaron en el codigo, para su implementacion se añaden en la carpeta del proyecto en microchip (fueron proporcionadas en por los profesores)
 
 // twi.h
 #ifndef TWI_H_
