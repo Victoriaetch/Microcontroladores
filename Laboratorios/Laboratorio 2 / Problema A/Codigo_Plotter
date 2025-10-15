@@ -20,18 +20,30 @@
 void inicializar_puertos(void);
 void inicializar_serial(void);
 char leer_comando_serial(void);
+
+void mostrar_menu(void):
+
+void mover_izquierda(void);
+void mover_derecha(void);
+void mover_arriba (void);
+void mover_abajo(void);
+void subir_solenoide(void);
+void bajar_solenoide(void);
+
 void dibujar_triangulo(void);
 void dibujar_cruz(void);
 void dibujar_circulo(void);
 void dibujar_todos(void);
-void procesar_comando(char comando);
 
+void dibujar_gato(void);
+void dibujar_rana (void);
+
+void procesar_comando(char comando);
 
 // Función para printf
 int uart_putchar(char c, FILE *stream);
 
 FILE uart_output = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
-
 
 // Función principal
 int main(void) {
