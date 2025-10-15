@@ -52,12 +52,13 @@ int main(void) {
 	
 	_delay_ms(1000); // Pequeño delay para estabilizar
 
-	
 	stdout = &uart_output;  // ¡IMPORTANTE: Configurar stdout para printf!
 
-	printf("Plotter inicializado exitosamente\n");
-	printf("Comandos: 1=Triangulo, 2=Cruz, 3=Circulo, t=Todos, g=Gato\n");
-	
+	printf("!Plotter inicializado exitosamente!\n");
+	printf("~~ Bienvenido al sistema de control del plotter ~~\n");
+
+	mostrar_menu();            // muestra menu con todas las opciones
+
 	while(1) {
 		char comando = leer_comando_serial();
 		if(comando != 0) {
