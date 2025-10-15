@@ -102,13 +102,90 @@ int uart_putchar(char c, FILE *stream) {
 		uart_putchar('\r', stream);
 	}
 	
-	// Esperar hasta que el buffer de transmisión esté vacío
+	// Espera hasta que el buffer de transmisión esté vacío
 	while (!(UCSR0A & (1 << UDRE0)));
 	
 	// Enviar carácter
 	UDR0 = c;
 }
 
+//-----MENU-----
+void mostrar_menu(void) {
+	printf("~~~~ MENU PRINCIPAL ~~~~ \n");
+	printf("1 = Dibujar triángulo\n");
+	printf("2 = Dibujar cruz\n");
+	printf("3 = Dibujar círculo\n");
+	printf("T = Dibujar todas las figuras\n");
+	printf("FIGURAS ESPECIALES:\n");
+	printf("G = Dibujar gato\n");
+	printf("R = Dibujar rana\n");
+	printf("MOVIMIENTOS DE SELECCIÓN MANUAL:\n");
+	printf("A = Mover izquierda\n");
+	printf("D = Mover derecha\n");
+	printf("W = Mover arriba\n");
+	printf("S = Mover abajo\n");
+	printf("O = Subir solenoide\n");
+	printf("L = Bajar solenoide\n");
+	printf("~~~~~~~~~~~~~~~~~~~~~~~~~~ \n");
+}
+
+//----- FUNCIONES DE POSICIONAMIENTO/DIBUJO MANUAL PARA EL USUARIO -----
+//Mover izquierda
+void mover_izquierda(void) {
+	printf("Moviendo a la izquierda...\n");
+	PORTD |= (1 << MOV_IZQUIERDA);
+	_delay_ms(8000);
+	PORTD &= ~(1 << MOV_IZQUIERDA);
+	printf("LISTO\n");
+}
+
+//Mover derecha
+void mover_derecha(void) {
+	printf("Moviendo a la derecha...\n");
+	PORTD |= (1 << MOV_DERECHA);
+	_delay_ms(5000);
+	PORTD &= ~(1 << MOV_DERECHA);
+	printf("LISTO\n");
+}
+
+//Mover arriba
+void mover_arriba(void) {
+	printf("Moviendo hacia arriba...\n");
+	PORTD |= (1 << MOV_ARRIBA);
+	_delay_ms(5000);
+	PORTD &= ~(1 << MOV_ARRIBA);
+	printf("LISTO\n");
+}
+
+//Mover abajo
+void mover_abajo(void) {
+	printf("Moviendo hacia abajo...\n");
+	PORTD |= (1 << MOV_ABAJO);
+	_delay_ms(8000);
+	PORTD &= ~(1 << MOV_ABAJO);
+	printf("LISTO\n");
+}
+
+//Funciones para bajar/subir solenoide manualmente
+//Baja solenoide
+void subir_solenoide(void) {
+	printf("Subiendo solenoide...\n");
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~(1 << SUBIR_SOLENOIDE);
+	printf("LISTO\n");	
+}
+
+//Baja solenoide
+void bajar_solenoide(void) {
+	printf("Bajando solenoide...\n");
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~(1 << BAJA_SOLENOIDE);
+	printf("LISTO\n");
+}
+
+//----- FUNCIONES FIGURAS GEOMETRICAS -----
 // Triángulo 
 void dibujar_triangulo(void) {
 	printf("Dibujando triangulo...\n");
@@ -117,45 +194,44 @@ void dibujar_triangulo(void) {
 	PORTD |= (1 << BAJA_SOLENOIDE);
 	_delay_ms(500);
 	
-	// Cateto vertical (abajo)
+	// Cateto vertical
 	for(int i = 0; i < 100; i++) {
 		PORTD |= (1 << MOV_ABAJO);
 		_delay_ms(500);
 		PORTD &= ~(1 << MOV_ABAJO);
 		_delay_ms(100);
 	}
-	
-	// Hipotenusa (arriba-izquierda)
-	for(int i = 0; i < 90; i++) {
-		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
-		_delay_ms(100);
-	}
-	
-	// Cateto horizontal (derecha)
+
+	// Cateto horizontal
 	for(int i = 0; i < 100; i++) {
 		PORTD |= (1 << MOV_DERECHA);
 		_delay_ms(500);
 		PORTD &= ~(1 << MOV_DERECHA);
 		_delay_ms(100);
 	}
+
+	// Hipotenusa 
+	for(int i = 0; i < 100; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
 		
 	// Subir solenoide
 	PORTD |= (1 << SUBIR_SOLENOIDE);
-	_delay_ms(500);
+	_delay_ms(800);
 	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
 	
-	// Ir al centro
-	for(int i = 0; i < 100; i++) {
+	// Mover (para no dibujar encima de las demas figuras cuando se elije dibujar todas)
+	for(int i = 0; i < 200; i++) {
 			PORTD |= (1 << MOV_IZQUIERDA);
 			_delay_ms(700);
 			PORTD &= ~(1 << MOV_IZQUIERDA);
 			_delay_ms(200);
 		}
 	
-	_delay_ms(500);
-	printf("Triangulo completado\n");
+	printf("Triangulo completado!\n");
 }
 
 // Cruz
@@ -164,7 +240,7 @@ void dibujar_cruz(void) {
 	
 	// Bajar solenoide
 	PORTD |= (1 << BAJA_SOLENOIDE);
-	_delay_ms(100);
+	_delay_ms(500);
 	
 	// Línea vertical hacia abajo
 	for(int i = 0; i < 100; i++) {
@@ -211,15 +287,14 @@ void dibujar_cruz(void) {
 	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
 	
 	// Ir al centro
-	for(int i = 0; i < 120; i++) {
+	for(int i = 0; i < 150; i++) {
 	PORTD |= (1 << MOV_IZQUIERDA);
 	_delay_ms(1000);
 	PORTD &= ~(1 << MOV_IZQUIERDA);
 	_delay_ms(1000);
 	}
-		
 	
-	printf("Cruz completada\n");
+	printf("Cruz completada!\n");
 }
 
 void dibujar_circulo(void) {
@@ -246,16 +321,16 @@ void dibujar_circulo(void) {
 		if (dx > 0) {
 			for (int j = 0; j < dx; j++) {
 				PORTD |= (1 << MOV_DERECHA);
-				_delay_ms(200);
+				_delay_ms(600);
 				PORTD &= ~(1 << MOV_DERECHA);
-				_delay_ms(200);
+				_delay_ms(600);
 			}
 			} else if (dx < 0) {
 			for (int j = 0; j < -dx; j++) {
 				PORTD |= (1 << MOV_IZQUIERDA);
-				_delay_ms(200);
+				_delay_ms(600);
 				PORTD &= ~(1 << MOV_IZQUIERDA);
-				_delay_ms(200);
+				_delay_ms(600);
 			}
 		}
 
@@ -263,16 +338,16 @@ void dibujar_circulo(void) {
 		if (dy > 0) {
 			for (int j = 0; j < dy; j++) {
 				PORTD |= (1 << MOV_ABAJO);
-				_delay_ms(200);
+				_delay_ms(600);
 				PORTD &= ~(1 << MOV_ABAJO);
-				_delay_ms(200);
+				_delay_ms(600);
 			}
 			} else if (dy < 0) {
 			for (int j = 0; j < -dy; j++) {
 				PORTD |= (1 << MOV_ARRIBA);
-				_delay_ms(200);
+				_delay_ms(600);
 				PORTD &= ~(1 << MOV_ARRIBA);
-				_delay_ms(200);
+				_delay_ms(600);
 			}
 		}
 
@@ -282,176 +357,13 @@ void dibujar_circulo(void) {
 
 	// Subir solenoide
 	PORTD |= (1 << SUBIR_SOLENOIDE);
-				_delay_ms(1000);
+	_delay_ms(800);
 	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
 
-	printf("Círculo completado\n");
+	printf("Círculo completado!\n");
 }
 
-
-//DIBUJO GATO. MEJORAR!!
-void dibujar_gato(void) {
-	printf("Dibujando gato...\n");
-	
-	// Ajustar este valor según la calibración
-	int pasos_por_cm = 25; // EJEMPLO: si 1 cm = 25 pasos
-	
-	// Bajar solenoide
-	PORTD |= (1 << BAJA_SOLENOIDE);
-	_delay_ms(300);
-
-	// 1) 2 cm derecha
-	for (int i = 0; i < 2 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_DERECHA);
-		_delay_ms(100);
-	}
-
-	// 2) 5 cm abajo
-	for (int i = 0; i < 5 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ABAJO);
-		_delay_ms(100);
-	}
-
-	// 3) 1 cm derecha
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_DERECHA);
-		_delay_ms(100);
-	}
-
-	// 4) 2 cm arriba
-	for (int i = 0; i < 2 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ARRIBA);
-		_delay_ms(100);
-	}
-
-	// 5) 1 cm arriba + 1 cm derecha (diagonal)
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA));
-		_delay_ms(100);
-	}
-
-	// 6) 1 cm arriba + 1 cm izquierda (diagonal)
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
-		_delay_ms(100);
-	}
-
-	// 7) 3 cm arriba
-	for (int i = 0; i < 3 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ARRIBA);
-		_delay_ms(100);
-	}
-
-	// 8) 1 cm abajo + 1 cm derecha
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
-		_delay_ms(100);
-	}
-
-	// 9) 1 cm derecha
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_DERECHA);
-		_delay_ms(100);
-	}
-
-	// 10) 1 cm arriba + 1 cm derecha
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA));
-		_delay_ms(100);
-	}
-
-	// 11) 3 cm abajo
-	for (int i = 0; i < 3 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ABAJO);
-		_delay_ms(100);
-	}
-
-	// 12) 1 cm abajo + 1 cm izquierda
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
-		_delay_ms(100);
-	}
-
-	// 13) 1 cm abajo + 1 cm derecha
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
-		_delay_ms(500);
-		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
-		_delay_ms(100);
-	}
-
-	// 14) 3 cm abajo
-	for (int i = 0; i < 3 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ABAJO);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ABAJO);
-		_delay_ms(100);
-	}
-
-	// 15) 5 cm izquierda
-	for (int i = 0; i < 5 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_IZQUIERDA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_IZQUIERDA);
-		_delay_ms(100);
-	}
-
-	// 16) 5 cm arriba
-	for (int i = 0; i < 5 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ARRIBA);
-		_delay_ms(100);
-	}
-
-	// 17) 1 cm izquierda
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_IZQUIERDA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_IZQUIERDA);
-		_delay_ms(100);
-	}
-
-	// 18) 1 cm arriba
-	for (int i = 0; i < 1 * pasos_por_cm; i++) {
-		PORTD |= (1 << MOV_ARRIBA);
-		_delay_ms(500);
-		PORTD &= ~(1 << MOV_ARRIBA);
-		_delay_ms(100);
-	}
-
-	// Subir solenoide
-	PORTD |= (1 << SUBIR_SOLENOIDE);
-	_delay_ms(500);
-	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
-
-	printf("Gato completado!\n");
-}
-
+//Dibujar todas las figuras geometricas
 void dibujar_todos(void) {
 	dibujar_triangulo();
 	_delay_ms(1000);
@@ -461,10 +373,766 @@ void dibujar_todos(void) {
 	
 	dibujar_circulo();
 	_delay_ms(1000);
-	
-	dibujar_gato();
-	_delay_ms(1000);
 }
+
+//------- GATO ---------
+void dibujar_gato(void) {
+	printf("Dibujando gato...\n");
+	
+	// Ajustar este valor según la calibración
+	int pasos_por_cm = 12.5; // ASUMO: 1 cm = 25 pasos
+	
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(800);
+
+    // ---------- CUERPO ----------
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 <<  MOV_DERECHA ));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 4 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 4 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}	
+	
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}   
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+		 
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}	
+
+	for (int i = 0; i < 4 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}   
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}	 
+	 
+	for (int i = 0; i < 4 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 6 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}    
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}   
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}  
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}	
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}   
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}	
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}  
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	} 
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}	
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}  
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}   
+	
+	for (int i = 0; i < 1  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}	
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}   
+		
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}
+		 
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	// ---------- PATITAS ----------
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+		
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(800);
+	
+	for (int i = 0; i < 5 * pasos_por_cm; i++) { 
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+	 
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	
+	 for (int i = 0; i < 5 * pasos_por_cm; i++) {
+	 	PORTD |= (1 << MOV_DERECHA);
+	 	_delay_ms(500);
+	 	PORTD &= ~(1 << MOV_DERECHA);
+	 	_delay_ms(100);
+ 	}
+	 	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}
+	 
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	 
+	 // Subir solenoide
+	 PORTD |= (1 << SUBIR_SOLENOIDE);
+	 _delay_ms(800);
+	 PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	 
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+		 
+	 // Bajar solenoide
+	 PORTD |= (1 << BAJA_SOLENOIDE);
+	 _delay_ms(800);
+	 
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA );
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA ));
+		_delay_ms(100);
+	}
+		
+	// ---------- BOCA ----------
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+		
+	for (int i = 0; i < 11 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+					
+	for (int i = 0; i < 5 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	 // Bajar solenoide
+	 PORTD |= (1 << BAJA_SOLENOIDE);
+	 _delay_ms(800);	 
+	 
+	for (int i = 0; i < 1  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+		
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+			
+	for (int i = 0; i < 1  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+		
+	// ---------- NARIZ ----------
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	 
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		 PORTD |= (1 << MOV_DERECHA);
+		 _delay_ms(500);
+		 PORTD &= ~(1 << MOV_DERECHA);
+		 _delay_ms(100);
+	 }
+	 	  
+	 // Bajar solenoide
+	 PORTD |= (1 << BAJA_SOLENOIDE);
+	 _delay_ms(800);
+	 
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+			   
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+	 	_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+	  	_delay_ms(100);
+	}
+	  	
+	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+	  
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+		  
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}	  
+	
+	for (int i = 0; i < 7 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+	 	_delay_ms(500);
+	 	PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	  
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+	
+	 for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	      PORTD |= (1 << MOV_ABAJO);
+	      _delay_ms(500);
+	      PORTD &= ~(1 << MOV_ABAJO);
+	      _delay_ms(100);
+      }
+
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 2  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ABAJO) | (1 << MOV_IZQUIERDA));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 2  * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA) | (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~((1 << MOV_ARRIBA) | (1 << MOV_DERECHA));
+		_delay_ms(100);
+	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_DERECHA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_DERECHA);
+		_delay_ms(100);
+	}
+	
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ABAJO);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ABAJO);
+		_delay_ms(100);
+	}
+	  
+    // ---------- OJOS ----------
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+
+  	for (int i = 0; i < 3 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_ARRIBA);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_ARRIBA);
+	  	_delay_ms(100);
+  	}
+  
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(800);
+	 	   
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+	
+  	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_ARRIBA);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_ARRIBA);
+	  	_delay_ms(100);
+  	}
+  	
+  	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_DERECHA);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_DERECHA);
+	  	_delay_ms(100);
+  	}
+	  
+  	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_ABAJO);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_ABAJO);
+	  	_delay_ms(100);
+  	}
+	  
+  	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_IZQUIERDA);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_IZQUIERDA);
+	  	_delay_ms(100);
+  	}
+  
+	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	
+  	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+	  	PORTD |= (1 << MOV_DERECHA);
+	  	_delay_ms(500);
+	  	PORTD &= ~(1 << MOV_DERECHA);
+	  	_delay_ms(100);
+  	}
+
+ 	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+	 	PORTD |= (1 << MOV_ABAJO);
+	 	_delay_ms(500);
+	 	PORTD &= ~(1 << MOV_ABAJO);
+	 	_delay_ms(100);
+ 	}
+ 	
+	// Subir solenoide
+	PORTD |= (1 << SUBIR_SOLENOIDE);
+	_delay_ms(800);
+	PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+
+    for (int i = 0; i < 2 * pasos_por_cm; i++) {
+	    PORTD |= (1 << MOV_DERECHA);
+	   	_delay_ms(500);
+	   	PORTD &= ~(1 << MOV_DERECHA);
+	   	_delay_ms(100);
+   	}
+	   
+	// Bajar solenoide
+	PORTD |= (1 << BAJA_SOLENOIDE);
+	_delay_ms(800); 
+	
+	 for (int i = 0; i < 2 * pasos_por_cm; i++) {
+	 	PORTD |= (1 << MOV_ARRIBA);
+	 	_delay_ms(500);
+	 	PORTD &= ~(1 << MOV_ARRIBA);
+	 	_delay_ms(100);
+	 }
+	 	
+   	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+    	PORTD |= (1 << MOV_DERECHA);
+    	_delay_ms(500);
+    	PORTD &= ~(1 << MOV_DERECHA);
+    	_delay_ms(100);
+   	}
+	   
+   	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	   	PORTD |= (1 << MOV_ABAJO);
+	   	_delay_ms(500);
+	   	PORTD &= ~(1 << MOV_ABAJO);
+	   	_delay_ms(100);
+   	}
+  
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+
+ 	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+	 	PORTD |= (1 << MOV_ABAJO);
+	 	_delay_ms(500);
+	 	PORTD &= ~(1 << MOV_ABAJO);
+	 	_delay_ms(100);
+ 	}
+
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_IZQUIERDA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_IZQUIERDA);
+		_delay_ms(100);
+	}
+
+   	for (int i = 0; i < 2 * pasos_por_cm; i++) {
+     	PORTD |= (1 << MOV_DERECHA);
+    	_delay_ms(500);
+	   	PORTD &= ~(1 << MOV_DERECHA);
+	   	_delay_ms(100);
+     }
+	 
+	for (int i = 0; i < 1 * pasos_por_cm; i++) {
+		PORTD |= (1 << MOV_ARRIBA);
+		_delay_ms(500);
+		PORTD &= ~(1 << MOV_ARRIBA);
+		_delay_ms(100);
+	}
+	  
+	 // Subir solenoide
+	 PORTD |= (1 << SUBIR_SOLENOIDE);
+	 _delay_ms(800);
+	 PORTD &= ~((1 << BAJA_SOLENOIDE) | (1 << SUBIR_SOLENOIDE));
+	 
+	 printf("Gato completado!\n");
+	
+}
+
 
 
 // Procesar comando del usuario
