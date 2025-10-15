@@ -1,0 +1,486 @@
+#include <avr/io.h>
+#include <avr/interrupt.h> 
+#include <stdint.h>        
+
+#define F_CPU 16000000UL
+
+#define BAUD 9600
+#define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
+
+#define BUZZER PB4
+#define NUM_BOTONES 8
+
+uint8_t botones[NUM_BOTONES] = {PC0, PC1, PC2, PC3, PC4, PC5, PD7, PD6}; 
+uint16_t notas_piano[NUM_BOTONES] = {262, 294, 330, 349, 392, 440, 494, 523};
+
+#define G3 196
+#define A3 220
+#define B3 247
+#define C4 262
+#define D4 294
+#define E4 330
+#define F4 349
+#define G4 392
+#define A4 440
+#define B4 494
+#define C5 523
+
+#define NEGRA 400
+#define CORCHEA (NEGRA/2)
+#define BLANCA (NEGRA*2)
+#define SILENCIO_CORTE (NEGRA/2)
+#define SILENCIO_LARGO (NEGRA*2)
+
+void retardo_microsegundos(uint16_t us);
+void generar_pulso(uint16_t freq); 
+void silencio(void);
+uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms); 
+void chequear_interrupcion_uart(char char_recibido); 
+void chequear_interrupcion_rapida(void);
+
+typedef enum {
+    ESTADO_P,
+    ESTADO_1, 
+    ESTADO_2  
+} Modo_Operacion;
+
+volatile Modo_Operacion estado_actual = ESTADO_P;
+volatile uint8_t cancion_activa = 0; 
+
+void UART_Init(void);
+void UART_PutChar(char data);
+char UART_CheckChar(void);
+void UART_PutString(const char *s);
+void mostrar_menu(void);
+
+void tarea_principal_p(void);
+void tarea_uno(void);
+void tarea_dos(void);
+
+void cancion1(void);
+void cancion2(void);
+
+void retardo_microsegundos(uint16_t us) {
+    uint32_t ciclos_por_us = (F_CPU / 1000000UL) / 4; 
+    uint32_t total_ciclos = (uint32_t)us * ciclos_por_us;
+
+    while (total_ciclos-- > 0) {
+        asm volatile ("nop"); 
+    }
+}
+
+void generar_pulso(uint16_t freq) {
+    if (freq == 0) return;
+
+    uint32_t periodo_us = 1000000UL / (uint32_t)freq;
+    uint16_t retardo_pulso_us = (uint16_t)(periodo_us / 2);
+
+    PORTB |= (1<<BUZZER);
+    retardo_microsegundos(retardo_pulso_us);
+
+    PORTB &= ~(1<<BUZZER);
+    retardo_microsegundos(retardo_pulso_us);
+}
+
+void silencio(void){
+    PORTB &= ~(1<<BUZZER);
+}
+
+uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms){
+    if (!cancion_activa) {
+        silencio();
+        return 1;
+    }
+
+    if (freq == 0 || dur_ms == 0) {
+        uint32_t tiempo_restante_us = (uint32_t)dur_ms * 1000UL;
+        uint16_t delay_chunk_us = 10000;
+
+        while(tiempo_restante_us > 0) {
+            uint16_t current_chunk_us = (tiempo_restante_us >= delay_chunk_us) ? delay_chunk_us : tiempo_restante_us;
+            
+            retardo_microsegundos(current_chunk_us);
+            
+            chequear_interrupcion_rapida();
+            if (!cancion_activa) return 1;
+            
+            tiempo_restante_us -= current_chunk_us;
+        }
+        return 0;
+    }
+
+    uint32_t periodo_us = 1000000UL / (uint32_t)freq;
+    uint32_t ciclos_onda = ((uint32_t)dur_ms * 1000UL) / periodo_us;
+    uint16_t retardo_pulso_us = (uint16_t)(periodo_us / 2);
+    
+    uint16_t chequeo_counter = 0; 
+
+    for(uint32_t i=0; i<ciclos_onda; i++){
+        if (!cancion_activa) break; 
+        
+        PORTB |= (1<<BUZZER);
+        retardo_microsegundos(retardo_pulso_us); 
+
+        PORTB &= ~(1<<BUZZER);
+        retardo_microsegundos(retardo_pulso_us); 
+        
+        chequeo_counter++;
+        if (chequeo_counter >= 10) { 
+             chequear_interrupcion_rapida();
+             chequeo_counter = 0;
+        }
+    }
+
+    silencio();
+    return !cancion_activa; 
+}
+
+void UART_Init(void) {
+    UBRR0H = (uint8_t)(UBRR_VALUE >> 8); 
+    UBRR0L = (uint8_t)UBRR_VALUE;       
+    UCSR0B = (1 << RXEN0) | (1 << TXEN0);
+}
+
+void UART_PutChar(char data) {
+    while (!(UCSR0A & (1 << UDRE0)));
+    UDR0 = data;
+}
+
+char UART_CheckChar(void) {
+    if (UCSR0A & (1 << RXC0)) {
+        return UDR0; 
+    } else {
+        return 0;  
+    }
+}
+
+void UART_PutString(const char *s) {
+    while (*s) {
+        UART_PutChar(*s++);
+    }
+}
+
+void mostrar_menu(void) {
+    UART_PutString("\r\n--- Menú ---\r\n");
+    UART_PutString("Seleccione una opción:\r\n");
+    UART_PutString(" 1 : Tocar cancion 1: 'El reino del revés'\r\n");
+    UART_PutString(" 2 : Tocar cancion 2: 'Himno a la alegría'\r\n");
+    UART_PutString("----------------------------------\r\n");
+    UART_PutString("Modo actual: Piano libre\r\n");
+}
+
+
+void chequear_interrupcion_uart(char char_recibido) {
+    if (char_recibido == 'S' || char_recibido == 's') {
+        cancion_activa = 0; 
+    }
+}
+
+void chequear_interrupcion_rapida(void) {
+    char opcion = UART_CheckChar();
+    if (opcion == 'S' || opcion == 's') {
+        cancion_activa = 0;
+    }
+}
+
+void tarea_principal_p(void) {
+    uint8_t i;
+    uint8_t presionado = 0; 
+    int8_t nota_a_tocar_idx = -1; 
+    
+    for (i = 0; i < NUM_BOTONES; i++) {
+        uint8_t estado;
+        uint8_t pin_bit = botones[i];
+        
+        if (i < 6) { 
+            estado = !(PINC & (1 << pin_bit)); 
+        } else { 
+            estado = !(PIND & (1 << pin_bit)); 
+        }
+        
+        if (estado) {  
+            nota_a_tocar_idx = i; 
+            presionado = 1;
+            break; 
+        }
+    }
+
+    if (presionado) {
+        generar_pulso(notas_piano[nota_a_tocar_idx]); 
+    } else {
+        silencio(); 
+    }
+}
+
+void tarea_uno(void) {
+    UART_PutString("\r\n--- Tocando 'El reino del revez - Maria Elena Walsh'. Presione 'S' para detener ---\r\n");
+    cancion_activa = 1; 
+    cancion1();
+    
+    cancion_activa = 0; 
+    silencio();
+    estado_actual = ESTADO_P; 
+    UART_PutString("\r\n--- Detenido. Volviendo a Piano (P) ---\r\n");
+}
+
+void tarea_dos(void) {
+    UART_PutString("\r\n--- Tocando 'Himno a la alegria- Ludwig van Beethoven'. Presione 'S' para detener ---\r\n");
+    cancion_activa = 1; 
+    cancion2();
+    
+    cancion_activa = 0;
+    silencio();
+    estado_actual = ESTADO_P;
+    UART_PutString("\r\n--- Detenido. Volviendo a Piano libre---\r\n");
+}
+
+void cancion1(void){
+    if(reproducir_tono(G3, CORCHEA*3/2)) return;
+    if(reproducir_tono(G3, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(A3, NEGRA)) return;
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(D4, NEGRA)) return;
+    
+    if(reproducir_tono(0, SILENCIO_CORTE)) return; 
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(B3, NEGRA)) return;
+    if(reproducir_tono(B3, CORCHEA)) return;
+    if(reproducir_tono(G3, CORCHEA)) return;
+    if(reproducir_tono(A3, NEGRA)) return;
+    if(reproducir_tono(B3, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return;
+    if(reproducir_tono(0, SILENCIO_LARGO)) return;
+
+    if(reproducir_tono(G3, CORCHEA*3/2)) return;
+    if(reproducir_tono(G3, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(A3, NEGRA)) return;
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(0, SILENCIO_CORTE)) return; 
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(B4, NEGRA)) return;
+    if(reproducir_tono(G3, NEGRA)) return;
+    if(reproducir_tono(A3, NEGRA)) return;
+    if(reproducir_tono(B3, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return;
+    if(reproducir_tono(0, SILENCIO_LARGO)) return;
+
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(C4, NEGRA)) return;
+    if(reproducir_tono(D4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(F4, BLANCA)) return;
+    if(reproducir_tono(0, SILENCIO_CORTE)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(B3, NEGRA*3/2)) return; 
+    if(reproducir_tono(B3, CORCHEA)) return;
+    if(reproducir_tono(A3, CORCHEA)) return;
+    if(reproducir_tono(A3, CORCHEA)) return;
+    if(reproducir_tono(B3, CORCHEA)) return;
+    if(reproducir_tono(C4, NEGRA*3/2)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(0, SILENCIO_CORTE)) return; 
+    if(reproducir_tono(E4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(G4, CORCHEA)) return;
+    if(reproducir_tono(G4, CORCHEA)) return;
+    if(reproducir_tono(C4, CORCHEA)) return;
+    if(reproducir_tono(A4, NEGRA*3/2)) return; 
+
+    if(reproducir_tono(A4, CORCHEA)) return;
+    if(reproducir_tono(0, SILENCIO_CORTE)) return; 
+    if(reproducir_tono(A4, CORCHEA)) return;
+    if(reproducir_tono(G4, NEGRA*3/2)) return; 
+    if(reproducir_tono(G4, CORCHEA)) return;
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(G4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return;
+    if(reproducir_tono(0, SILENCIO_CORTE)) return; 
+    if(reproducir_tono(0, SILENCIO_LARGO)) return;
+}
+
+void cancion2(void){
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(G4, NEGRA)) return;
+    if(reproducir_tono(G4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(E4, NEGRA*3/2)) return; 
+    if(reproducir_tono(D4, CORCHEA)) return; 
+    if(reproducir_tono(D4, BLANCA)) return;
+
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(G4, NEGRA)) return;
+    if(reproducir_tono(G4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(D4, NEGRA*3/2)) return; 
+    if(reproducir_tono(C4, CORCHEA)) return; 
+    if(reproducir_tono(C4, BLANCA)) return;
+
+    if(reproducir_tono(D4, BLANCA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return; 
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return; 
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(G3, BLANCA)) return;
+
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(G4, NEGRA)) return;
+    if(reproducir_tono(G4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(D4, NEGRA*3/2)) return; 
+    if(reproducir_tono(C4, CORCHEA)) return; 
+    if(reproducir_tono(C4, BLANCA)) return;
+
+    if(reproducir_tono(D4, BLANCA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return; 
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(E4, CORCHEA)) return; 
+    if(reproducir_tono(F4, CORCHEA)) return;
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(G3, BLANCA)) return;
+
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(G4, NEGRA)) return;
+    if(reproducir_tono(G4, NEGRA)) return; 
+    if(reproducir_tono(F4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return;
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(C4, NEGRA)) return; 
+    if(reproducir_tono(D4, NEGRA)) return; 
+    if(reproducir_tono(E4, NEGRA)) return;
+    if(reproducir_tono(D4, NEGRA*3/2)) return; 
+    if(reproducir_tono(C4, CORCHEA)) return; 
+    if(reproducir_tono(C4, BLANCA)) return;
+}
+
+int main(void) {
+    char opcion;
+
+    DDRB |= (1 << BUZZER); 
+    silencio();
+    
+    DDRC &= ~0x3F; 
+    PORTC |= 0x3F; 
+    DDRD &= ~((1 << PD6) | (1 << PD7)); 
+    PORTD |= ((1 << PD6) | (1 << PD7)); 
+    
+    UART_Init();
+
+    mostrar_menu();
+
+    while (1) {
+        
+        opcion = UART_CheckChar(); 
+
+        if (opcion != 0) {
+            
+            chequear_interrupcion_uart(opcion);
+
+            switch (opcion) {
+                case '1':
+                    if (estado_actual != ESTADO_1) {
+                        cancion_activa = 0;
+                        estado_actual = ESTADO_1;
+                        UART_PutString("\r\n-> CAMBIO: Cancion 1'\r\n");
+                    }
+                    break;
+                case '2':
+                    if (estado_actual != ESTADO_2) {
+                        cancion_activa = 0;
+                        estado_actual = ESTADO_2;
+                        UART_PutString("\r\n-> CAMBIO: Cancion 2'\r\n");
+                    }
+                    break;
+                case 'S':
+                case 's':
+                    break; 
+                case '\n':
+                case '\r':
+                    break;
+                default:
+                    UART_PutString("\r\nOpcion invalida. Opciones: 1, 2, S.\r\n");
+                    break;
+            }
+        }
+
+        switch (estado_actual) {
+            case ESTADO_P:
+                tarea_principal_p();
+                break;
+            case ESTADO_1:
+                tarea_uno(); 
+                break;
+            case ESTADO_2:
+                tarea_dos(); 
+                break;
+        }
+    }
+    
+    return 0; 
+}
