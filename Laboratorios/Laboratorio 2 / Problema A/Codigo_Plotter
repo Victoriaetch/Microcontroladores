@@ -90,9 +90,10 @@ void inicializar_serial(void) {
 
 // Leer comando desde el monitor serial MEJORADA
 char leer_comando_serial(void) {
-	// Esperar hasta que llegue un dato
-	while (!(UCSR0A & (1 << RXC0)));
+	if (UCSR0A & (1 << RXC0))
 	return UDR0;
+	else
+	return 0;
 }
 
 // Función para printf
