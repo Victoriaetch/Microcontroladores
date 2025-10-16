@@ -1,0 +1,93 @@
+import turtle
+
+# Configuración inicial
+t = turtle.Turtle()
+t.speed(10)
+t.pensize(2)
+
+# Escala: 1 cm = 20 píxeles (aprox. para este entorno. NO EN LA REALIDAD)
+pasos_por_cm = 20
+
+//DEFINICION DE MOVIMIENTOS
+def mover_derecha(cm): t.setheading(0); t.forward(cm * pasos_por_cm)
+def mover_izquierda(cm): t.setheading(180); t.forward(cm * pasos_por_cm)
+def mover_arriba(cm): t.setheading(90); t.forward(cm * pasos_por_cm)
+def mover_abajo(cm): t.setheading(270); t.forward(cm * pasos_por_cm)
+def mover_diag_arriba_der(cm): t.setheading(45); t.forward(cm * pasos_por_cm)
+def mover_diag_arriba_izq(cm): t.setheading(135); t.forward(cm * pasos_por_cm)
+def mover_diag_abajo_der(cm): t.setheading(315); t.forward(cm * pasos_por_cm)
+def mover_diag_abajo_izq(cm): t.setheading(225); t.forward(cm * pasos_por_cm)
+
+#FUNCION DIBUJAR GATO
+def dibujar_gato():
+
+  #LISTA DE MOVIMIENTOS PARA DIBUJAR LA RANA
+    mover_diag_arriba_der(0.5)
+    mover_arriba(1.5)
+    mover_diag_arriba_der(0.5)
+    mover_diag_abajo_der(0.5)
+    mover_arriba(1.5)
+    mover_diag_arriba_der(0.5)
+    mover_diag_arriba_izq(0.5)
+    mover_arriba(1)
+    mover_diag_arriba_der(0.5)
+    mover_diag_arriba_der(0.5)
+    mover_diag_abajo_der(0.5)
+    mover_diag_abajo_izq(0.5)
+    mover_diag_arriba_izq(0.5)
+
+    t.penup() 
+    mover_derecha(0.7)
+    t.pendown()   
+    mover_derecha(1)
+    mover_diag_arriba_der(0.5)
+    mover_diag_abajo_der(0.5)
+    mover_diag_abajo_izq(0.5)
+    mover_diag_arriba_izq(0.5)
+    
+    t.penup() 
+    mover_derecha(0.7)
+    t.pendown()   
+    mover_diag_abajo_der(0.5)
+    mover_abajo(1)
+    mover_diag_abajo_izq(0.5)
+    mover_diag_abajo_der(0.5)
+    mover_abajo(1.5)
+    mover_diag_arriba_der(0.5)
+    mover_diag_abajo_der(0.5)
+    mover_abajo(1.5)
+    mover_diag_abajo_der(0.5)
+    mover_izquierda(1)
+    mover_arriba(2)
+    mover_abajo(2)
+    mover_diag_abajo_der(0.5)
+    mover_izquierda(1.5)
+    mover_diag_arriba_der(0.5)
+    mover_arriba(2)
+    mover_abajo(2)
+    mover_izquierda(1.5)
+    mover_arriba(2)
+    mover_abajo(2)
+    mover_diag_abajo_der(0.5)
+    mover_izquierda(1.6)
+    mover_diag_arriba_der(0.5)
+    mover_izquierda(1)
+    mover_derecha(1)
+    mover_arriba(2)
+
+    t.penup() 
+    mover_arriba(1.7)
+    mover_derecha(0.3)
+    t.pendown()
+    mover_derecha(2.5)
+    
+    t.penup() 
+    mover_derecha(0.3)
+    mover_arriba(0.3)
+    t.pendown()
+    mover_izquierda(3)
+
+    t.hideturtle()
+    turtle.done()
+
+dibujar_gato()
