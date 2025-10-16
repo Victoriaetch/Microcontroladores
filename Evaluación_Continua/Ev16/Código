@@ -1,0 +1,64 @@
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+#include <avr/interrupt.h>
+
+volatile uint8_t wdt_wakes = 0;  
+ISR(WDT_vect) {
+  wdt_wakes++;
+}
+
+void wdt_init_8s_interrupt() {
+  MCUSR &= ~(1 << WDRF);               
+  WDTCSR = (1 << WDCE) | (1 << WDE);   
+  WDTCSR = (1 << WDIE) | (1 << WDP3) | (1 << WDP0); 
+}
+
+void leds_on() {
+  for (int pin = 8; pin <= 12; pin++) digitalWrite(pin, HIGH);
+}
+
+void leds_off() {
+  for (int pin = 8; pin <= 12; pin++) digitalWrite(pin, LOW);
+}
+
+void setup() {
+  for (int pin = 8; pin <= 12; pin++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+  }
+
+  wdt_init_8s_interrupt();
+}
+
+void delay_ms_long(unsigned long ms) {
+  while (ms >= 50) { delay(50); ms -= 50; }
+  if (ms) delay(ms);
+}
+
+void loop() {
+  // Modo activo
+  leds_on();
+  delay_ms_long(4000);
+  leds_off();
+
+  // 3 modos
+  wdt_wakes = 0;
+  uint8_t wakes_needed = 4; // 4 x 8s = 32s aprox
+
+  while (wdt_wakes < wakes_needed) {
+    uint8_t idx = wdt_wakes; 
+
+    if (idx == 0) {
+      set_sleep_mode(SLEEP_MODE_IDLE);        // primer modo - IDLE
+    } else if (idx == 1) {
+      set_sleep_mode(SLEEP_MODE_PWR_SAVE);    // segundo - POWERSAVE
+    } else {
+      set_sleep_mode(SLEEP_MODE_PWR_DOWN);    // resto - POWERDOWN
+    }
+
+    sleep_enable();
+    sleep_cpu();  
+    sleep_disable();
+  }
+
+}
