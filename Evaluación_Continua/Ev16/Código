@@ -1,3 +1,5 @@
+//El video del funcionamiento se grabo con 1 segundo, pero este código y los calculos se hiceron con 4 segundos 
+
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
