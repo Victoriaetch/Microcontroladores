@@ -1,0 +1,342 @@
+#include <Arduino.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <Servo.h>
+#include <math.h>
+#include <Adafruit_NeoPixel.h> 
+
+#define LED_R_PIN 8
+#define LED_G_PIN 9
+#define LED_B_PIN 10
+#define LDR_PIN A0
+#define SERVO_PIN 11
+#define CALIBRATION_PIN 2
+
+#define NEOPIXEL_PIN 6    
+#define NUM_PIXELS 64 
+
+Servo myServo;
+#define BAUDRATE 9600
+#define NUM_CALIBRATION_SAMPLES 30
+#define SIGMA_MULTIPLIER 3.0
+
+enum Mode { NORMAL_MODE, CALIBRATION_MODE };
+Mode currentMode = NORMAL_MODE;
+
+Adafruit_NeoPixel strip(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+typedef struct {
+    const char* name;
+    uint16_t r_ref;
+    uint16_t g_ref;
+    uint16_t b_ref;
+    uint8_t angle; 
+    float max_radius;
+} ColorReference;
+
+ColorReference colorPalette[] = {
+    {"ROJO", 111, 74, 72, 0, 35.0},      // Clasifica a 0 grados
+    {"VERDE", 101, 117, 71, 120, 35.0},  // Clasifica a 120 grados
+    {"AMARILLO", 122, 111, 78, 60, 35.0}, // Clasifica a 60 grados
+    {"CIAN", 106, 131, 110, 0, 35.0},    // Clasifica a 0 grados
+    {"VIOLETA", 88, 89, 71, 60, 35.0},   // Clasifica a 60 grados
+    {"MAGENTA", 114, 103, 83, 120, 35.0} // Clasifica a 120 grados
+};
+const uint8_t NUM_COLORS = sizeof(colorPalette) / sizeof(colorPalette[0]);
+
+int lastButtonState = HIGH;
+long lastDebounceTime = 0;
+long debounceDelay = 50;
+int currentCalibrationIndex = 0;
+
+void setNeoPixelColor(const char* colorName) {
+    uint32_t color = strip.Color(0, 0, 0); 
+
+    if (strcmp(colorName, "ROJO") == 0) {
+        color = strip.Color(255, 0, 0);
+    } else if (strcmp(colorName, "VERDE") == 0) {
+        color = strip.Color(0, 255, 0);
+    } else if (strcmp(colorName, "AMARILLO") == 0) {
+        color = strip.Color(255, 255, 0);
+    } else if (strcmp(colorName, "CIAN") == 0) {
+        color = strip.Color(0, 255, 255);
+    } else if (strcmp(colorName, "VIOLETA") == 0) {
+        color = strip.Color(128, 0, 128); 
+    } else if (strcmp(colorName, "MAGENTA") == 0) {
+        color = strip.Color(255, 0, 255);
+    } else {
+    }
+
+    for (int i = 0; i < NUM_PIXELS; i++) {
+        strip.setPixelColor(i, color);
+    }
+    
+    strip.show(); 
+}
+
+uint16_t ADC_Promedio(uint8_t canal_analogico, uint8_t muestras) {
+    uint32_t suma = 0;
+    for (uint8_t i = 0; i < muestras; i++) {
+        suma += analogRead(canal_analogico);
+        delay(5);
+    }
+    return (uint16_t)(suma / muestras);
+}
+
+void Servo_Init(void) {
+    myServo.attach(SERVO_PIN);
+    myServo.write(0);
+}
+
+void Servo_SetAngle(uint8_t angle) {
+    myServo.write(angle);
+}
+
+void Servo_Move_Delay(uint8_t angle) {
+    Servo_SetAngle(angle);
+    delay(15);
+}
+
+void LED_RGB_Init(void) {
+    pinMode(LED_R_PIN, OUTPUT);
+    pinMode(LED_G_PIN, OUTPUT);
+    pinMode(LED_B_PIN, OUTPUT);
+    pinMode(CALIBRATION_PIN, INPUT_PULLUP);
+}
+
+void LED_RGB(uint8_t r, uint8_t g, uint8_t b) {
+    digitalWrite(LED_R_PIN, r ? HIGH : LOW);
+    digitalWrite(LED_G_PIN, g ? HIGH : LOW);
+    digitalWrite(LED_B_PIN, b ? HIGH : LOW);
+}
+
+uint16_t medir_color(uint8_t r, uint8_t g, uint8_t b) {
+    LED_RGB(r, g, b);
+    delay(200);
+    return ADC_Promedio(LDR_PIN, 10);
+}
+
+const ColorReference* detectar_color_vectorial(uint16_t r, uint16_t g, uint16_t b) {
+    float minDist = 1000000.0;
+    const ColorReference* closestColor = NULL;
+
+    for (uint8_t i = 0; i < NUM_COLORS; i++) {
+        float dr = (float)r - (float)colorPalette[i].r_ref;
+        float dg = (float)g - (float)colorPalette[i].g_ref;
+        float db = (float)b - (float)colorPalette[i].b_ref;
+
+        float distance = sqrt(dr * dr + dg * dg + db * db);
+
+        if (distance < minDist) {
+            minDist = distance;
+            closestColor = &colorPalette[i];
+        }
+    }
+
+    if (closestColor != NULL && minDist > closestColor->max_radius) {
+        return NULL;
+    } else if (closestColor == NULL) {
+        return NULL;
+    }
+
+    return closestColor;
+}
+
+void startCalibrationMode() {
+    currentMode = CALIBRATION_MODE;
+    currentCalibrationIndex = 0;
+    Servo_Move_Delay(colorPalette[currentCalibrationIndex].angle);
+    Serial.println("--- MODO CALIBRACION INICIADO ---");
+    Serial.print("Coloque muestra: ");
+    Serial.println(colorPalette[currentCalibrationIndex].name);
+    setNeoPixelColor("INDEFINIDO"); // Apagar NeoPixel al entrar
+}
+
+void exitCalibrationMode() {
+    currentMode = NORMAL_MODE;
+    LED_RGB(0, 0, 0);
+    Servo_Move_Delay(180); 
+    Serial.println("--- MODO CALIBRACION FINALIZADO ---");
+}
+
+void calibrateCurrentColor() {
+    uint16_t samples_r[NUM_CALIBRATION_SAMPLES];
+    uint16_t samples_g[NUM_CALIBRATION_SAMPLES];
+    uint16_t samples_b[NUM_CALIBRATION_SAMPLES];
+
+    uint32_t sum_r = 0, sum_g = 0, sum_b = 0;
+    float mean_r, mean_g, mean_b;
+    float variance_r = 0.0, variance_g = 0.0, variance_b = 0.0;
+    float sigma_r, sigma_g, sigma_b;
+    float max_radius;
+
+    Serial.print("Calibrando: ");
+    Serial.print(colorPalette[currentCalibrationIndex].name);
+    Serial.println("...");
+    setNeoPixelColor(colorPalette[currentCalibrationIndex].name); 
+
+    LED_RGB(1, 1, 1);
+    delay(100);
+    LED_RGB(0, 0, 0);
+    delay(100);
+
+    for (int i = 0; i < NUM_CALIBRATION_SAMPLES; i++) {
+        samples_r[i] = medir_color(1, 0, 0);
+        samples_g[i] = medir_color(0, 1, 0);
+        samples_b[i] = medir_color(0, 0, 1);
+
+        sum_r += samples_r[i];
+        sum_g += samples_g[i];
+        sum_b += samples_b[i];
+
+        LED_RGB(0, 0, 0);
+        delay(50);
+    }
+    setNeoPixelColor("INDEFINIDO");
+    
+    mean_r = (float)sum_r / NUM_CALIBRATION_SAMPLES;
+    mean_g = (float)sum_g / NUM_CALIBRATION_SAMPLES;
+    mean_b = (float)sum_b / NUM_CALIBRATION_SAMPLES;
+
+    for (int i = 0; i < NUM_CALIBRATION_SAMPLES; i++) {
+        variance_r += pow((float)samples_r[i] - mean_r, 2);
+        variance_g += pow((float)samples_g[i] - mean_g, 2);
+        variance_b += pow((float)samples_b[i] - mean_b, 2);
+    }
+    variance_r /= NUM_CALIBRATION_SAMPLES;
+    variance_g /= NUM_CALIBRATION_SAMPLES;
+    variance_b /= NUM_CALIBRATION_SAMPLES;
+
+    sigma_r = sqrt(variance_r);
+    sigma_g = sqrt(variance_g);
+    sigma_b = sqrt(variance_b);
+
+    max_radius = sqrt(
+        pow(sigma_r * SIGMA_MULTIPLIER, 2) +
+        pow(sigma_g * SIGMA_MULTIPLIER, 2) +
+        pow(sigma_b * SIGMA_MULTIPLIER, 2)
+    );
+
+    colorPalette[currentCalibrationIndex].r_ref = (uint16_t)mean_r;
+    colorPalette[currentCalibrationIndex].g_ref = (uint16_t)mean_g;
+    colorPalette[currentCalibrationIndex].b_ref = (uint16_t)mean_b;
+    colorPalette[currentCalibrationIndex].max_radius = max_radius;
+
+    Serial.print("Nuevo vector de ");
+    Serial.print(colorPalette[currentCalibrationIndex].name);
+    Serial.print(": R="); Serial.print(colorPalette[currentCalibrationIndex].r_ref);
+    Serial.print(" G="); Serial.print(colorPalette[currentCalibrationIndex].g_ref);
+    Serial.print(" B="); Serial.print(colorPalette[currentCalibrationIndex].b_ref);
+    Serial.print(" | Radio Sigma ("); Serial.print(SIGMA_MULTIPLIER); Serial.print("x): ");
+    Serial.println(max_radius);
+
+    currentCalibrationIndex++;
+
+    if (currentCalibrationIndex >= NUM_COLORS) {
+        exitCalibrationMode();
+    } else {
+        Servo_Move_Delay(colorPalette[currentCalibrationIndex].angle); 
+        Serial.print("LISTO. Coloque muestra: ");
+        Serial.println(colorPalette[currentCalibrationIndex].name);
+    }
+}
+
+void handleButton() {
+    int reading = digitalRead(CALIBRATION_PIN);
+
+    if (reading != lastButtonState) {
+        lastDebounceTime = millis();
+    }
+
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+        if (reading == LOW) {
+
+            long pressDuration = 0;
+            while (digitalRead(CALIBRATION_PIN) == LOW && pressDuration < 3000) {
+                delay(10);
+                pressDuration += 10;
+            }
+
+            if (pressDuration >= 3000) {
+                if (currentMode == NORMAL_MODE) {
+                    startCalibrationMode();
+                } else {
+                    exitCalibrationMode();
+                }
+            } else if (pressDuration > 50) {
+                if (currentMode == CALIBRATION_MODE) {
+                    calibrateCurrentColor();
+                }
+            }
+        }
+    }
+    lastButtonState = reading;
+}
+
+void setup() {
+    Serial.begin(BAUDRATE);
+    LED_RGB_Init();
+    Servo_Init();
+    
+    strip.begin(); 
+    strip.show(); 
+    
+    Serial.println("Sistema de clasificacion de color iniciado.");
+    Serial.println("Mantenga presionado el boton (Pin 2) por 3s para CALIBRAR.");
+}
+
+void loop() {
+    handleButton();
+
+    if (currentMode == NORMAL_MODE) {
+        uint16_t adc_r, adc_g, adc_b;
+        const ColorReference* detectedColor;
+        uint8_t servoAngle;
+        const char* colorName;
+
+        adc_r = medir_color(1, 0, 0);
+        adc_g = medir_color(0, 1, 0);
+        adc_b = medir_color(0, 0, 1);
+        LED_RGB(0, 0, 0);
+
+        detectedColor = detectar_color_vectorial(adc_r, adc_g, adc_b);
+
+        if (detectedColor != NULL) {
+            colorName = detectedColor->name;
+            servoAngle = detectedColor->angle;
+            
+            setNeoPixelColor(colorName);
+            
+            if (servoAngle == 0) {
+                LED_RGB(1, 0, 0); 
+            } else if (servoAngle == 60) {
+                LED_RGB(1, 1, 0); 
+            } else if (servoAngle == 120) {
+                LED_RGB(1, 0, 1); 
+            } else {
+                LED_RGB(0, 0, 0);
+            }
+            
+        } else {
+            colorName = "INDEFINIDO";
+            servoAngle = 180; 
+            LED_RGB(0, 0, 1); 
+            
+            setNeoPixelColor("INDEFINIDO");
+        }
+
+        Servo_Move_Delay(servoAngle);
+
+        Serial.print("Muestra: R="); Serial.print(adc_r);
+        Serial.print(" G="); Serial.print(adc_g);
+        Serial.print(" B="); Serial.println(adc_b);
+        Serial.print("COLOR DETECTADO: "); Serial.print(colorName);
+        Serial.print(" | SERVO: "); Serial.print(servoAngle); Serial.println("°");
+
+        delay(1500);
+    } else {
+        setNeoPixelColor("INDEFINIDO");
+        delay(100);
+    }
+}
