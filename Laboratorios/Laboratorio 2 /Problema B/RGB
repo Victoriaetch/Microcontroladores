@@ -14,8 +14,7 @@
 #define CALIBRATION_PIN 2
 
 #define NEOPIXEL_PIN 6    
-#define NUM_PIXELS 64 
-
+#define NUM_PIXELS 64    
 Servo myServo;
 #define BAUDRATE 9600
 #define NUM_CALIBRATION_SAMPLES 30
@@ -36,12 +35,12 @@ typedef struct {
 } ColorReference;
 
 ColorReference colorPalette[] = {
-    {"ROJO", 111, 74, 72, 0, 35.0},      // Clasifica a 0 grados
-    {"VERDE", 101, 117, 71, 120, 35.0},  // Clasifica a 120 grados
-    {"AMARILLO", 122, 111, 78, 60, 35.0}, // Clasifica a 60 grados
-    {"CIAN", 106, 131, 110, 0, 35.0},    // Clasifica a 0 grados
-    {"VIOLETA", 88, 89, 71, 60, 35.0},   // Clasifica a 60 grados
-    {"MAGENTA", 114, 103, 83, 120, 35.0} // Clasifica a 120 grados
+    {"ROJO", 111, 74, 72, 0, 35.0},      
+    {"VERDE", 101, 117, 71, 120, 35.0},  
+    {"AMARILLO", 122, 111, 78, 60, 35.0}, 
+    {"CIAN", 106, 131, 110, 0, 35.0},    
+    {"VIOLETA", 88, 89, 71, 60, 35.0},  
+    {"MAGENTA", 114, 103, 83, 120, 35.0} 
 };
 const uint8_t NUM_COLORS = sizeof(colorPalette) / sizeof(colorPalette[0]);
 
@@ -62,6 +61,7 @@ void setNeoPixelColor(const char* colorName) {
     } else if (strcmp(colorName, "CIAN") == 0) {
         color = strip.Color(0, 255, 255);
     } else if (strcmp(colorName, "VIOLETA") == 0) {
+        // Violeta (algo de rojo y azul)
         color = strip.Color(128, 0, 128); 
     } else if (strcmp(colorName, "MAGENTA") == 0) {
         color = strip.Color(255, 0, 255);
@@ -150,7 +150,7 @@ void startCalibrationMode() {
     Serial.println("--- MODO CALIBRACION INICIADO ---");
     Serial.print("Coloque muestra: ");
     Serial.println(colorPalette[currentCalibrationIndex].name);
-    setNeoPixelColor("INDEFINIDO"); // Apagar NeoPixel al entrar
+    setNeoPixelColor("INDEFINIDO"); 
 }
 
 void exitCalibrationMode() {
@@ -298,7 +298,7 @@ void loop() {
         adc_r = medir_color(1, 0, 0);
         adc_g = medir_color(0, 1, 0);
         adc_b = medir_color(0, 0, 1);
-        LED_RGB(0, 0, 0);
+        LED_RGB(0, 0, 0); 
 
         detectedColor = detectar_color_vectorial(adc_r, adc_g, adc_b);
 
@@ -306,34 +306,66 @@ void loop() {
             colorName = detectedColor->name;
             servoAngle = detectedColor->angle;
             
+            float dr = (float)adc_r - (float)detectedColor->r_ref;
+            float dg = (float)adc_g - (float)detectedColor->g_ref;
+            float db = (float)adc_b - (float)detectedColor->b_ref;
+            float minDist = sqrt(dr * dr + dg * dg + db * db);
+            
             setNeoPixelColor(colorName);
             
             if (servoAngle == 0) {
-                LED_RGB(1, 0, 0); 
+                LED_RGB(1, 0, 0);
             } else if (servoAngle == 60) {
                 LED_RGB(1, 1, 0); 
             } else if (servoAngle == 120) {
-                LED_RGB(1, 0, 1); 
+                LED_RGB(1, 0, 1);
             } else {
                 LED_RGB(0, 0, 0);
             }
             
+            Servo_Move_Delay(servoAngle);
+
+            Serial.println("-------------------------------------");
+            Serial.println("--- CLASIFICACION EXITOSA ---");
+            
+            Serial.print("1. Valor de lectura (Fotocelda/LDR): R="); Serial.print(adc_r);
+            Serial.print(", G="); Serial.print(adc_g);
+            Serial.print(", B="); Serial.println(adc_b);
+
+            Serial.print("2. Color detectado: "); Serial.println(colorName);
+            
+            Serial.print("3. Valor de referencia (Vector): R_ref="); Serial.print(detectedColor->r_ref);
+            Serial.print(", G_ref="); Serial.print(detectedColor->g_ref);
+            Serial.print(", B_ref="); Serial.println(detectedColor->b_ref);
+            
+            Serial.print("4. Diferencia (Distancia Euclidiana): "); Serial.print(minDist);
+            Serial.print(" (Max Radio: "); Serial.print(detectedColor->max_radius); Serial.println(")");
+            Serial.println("-------------------------------------");
+
         } else {
             colorName = "INDEFINIDO";
             servoAngle = 180; 
             LED_RGB(0, 0, 1); 
-            
+
             setNeoPixelColor("INDEFINIDO");
+            
+            Servo_Move_Delay(servoAngle);
+
+            Serial.println("-------------------------------------");
+            Serial.println("--- CLASIFICACION INDEFINIDA ---");
+            
+            Serial.print("1. Valor de lectura (Fotocelda/LDR): R="); Serial.print(adc_r);
+            Serial.print(", G="); Serial.print(adc_g);
+            Serial.print(", B="); Serial.println(adc_b);
+            
+            Serial.print("2. Color detectado: "); Serial.println(colorName);
+            
+            Serial.println("3. Valor de referencia (Vector): N/A (Fuera de rango)");
+            
+            Serial.println("4. Diferencia (Distancia Euclidiana): N/A (Distancia > Radio Max)");
+            Serial.println("-------------------------------------");
         }
-
-        Servo_Move_Delay(servoAngle);
-
-        Serial.print("Muestra: R="); Serial.print(adc_r);
-        Serial.print(" G="); Serial.print(adc_g);
-        Serial.print(" B="); Serial.println(adc_b);
-        Serial.print("COLOR DETECTADO: "); Serial.print(colorName);
-        Serial.print(" | SERVO: "); Serial.print(servoAngle); Serial.println("°");
-
+        
         delay(1500);
     } else {
         setNeoPixelColor("INDEFINIDO");
