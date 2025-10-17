@@ -1,0 +1,185 @@
+// Este còdigo se utilizó en la simulación, cuenta con lo mismo que el prinicpal a excepción de la calibración.
+// Se implementó en microchip
+
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+#include <avr/interrupt.h>
+
+#define LDR_PIN 0
+#define LED_R PD2
+#define LED_G PD3
+#define LED_B PD4
+#define LED_Y PD5
+#define LED_MAG_R PB4
+#define LED_MAG_G PB5
+#define LED_MAG_B PB6
+#define LED_CIAN_R PC2
+#define LED_CIAN_G PC3
+#define LED_CIAN_B PC4
+
+#define BAUDRATE 9600
+
+#define LED_STRIP_PIN PD6
+#define WIDTH 5
+#define HEIGHT 5
+#define NUM_LEDS (WIDTH * HEIGHT)
+uint8_t leds[NUM_LEDS][3];
+
+void UART_init(void) {
+	uint16_t ubrr = (F_CPU / (16UL * BAUDRATE)) - 1;
+	UBRR0H = (uint8_t)(ubrr >> 8);
+	UBRR0L = (uint8_t)ubrr;
+	UCSR0B = (1 << TXEN0);
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+}
+
+void UART_sendChar(char c) {
+	while (!(UCSR0A & (1 << UDRE0)));
+	UDR0 = c;
+}
+
+void UART_sendString(const char *s) {
+	while (*s) UART_sendChar(*s++);
+}
+
+void ADC_init(void) {
+	ADMUX = (1 << REFS0);
+	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1);
+}
+
+uint16_t ADC_read(uint8_t canal) {
+	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
+	ADCSRA |= (1 << ADSC);
+	while (ADCSRA & (1 << ADSC));
+	return ADC;
+}
+
+void Servo_Init(void) {
+	DDRB |= (1 << PB1);
+	TCCR1A = (1 << COM1A1) | (1 << WGM11);
+	TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
+	ICR1 = 39999; 
+}
+
+void Servo_SetAngle(uint8_t angle) {
+	uint16_t pulse_us = 1000 + (angle * 1000UL / 180);
+	OCR1A = pulse_us * 2; 
+}
+
+void LED_Init(void) {
+	DDRD |= (1 << LED_R) | (1 << LED_G) | (1 << LED_B) | (1 << LED_Y);
+	PORTD |= (1 << LED_R) | (1 << LED_G) | (1 << LED_B) | (1 << LED_Y);
+
+	DDRB |= (1 << LED_MAG_R) | (1 << LED_MAG_B);
+	PORTB |= (1 << LED_MAG_R) | (1 << LED_MAG_B);
+
+	DDRC |= (1 << LED_CIAN_G) | (1 << LED_CIAN_B);
+	PORTC |= (1 << LED_CIAN_G) | (1 << LED_CIAN_B);
+}
+
+void sendBit(uint8_t bitVal) {
+	if (bitVal) {
+		PORTD |= (1 << LED_STRIP_PIN);
+		asm volatile("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+		PORTD &= ~(1 << LED_STRIP_PIN);
+		asm volatile("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+		} else {
+		PORTD |= (1 << LED_STRIP_PIN);
+		asm volatile("nop\n\t""nop\n\t""nop\n\t");
+		PORTD &= ~(1 << LED_STRIP_PIN);
+		asm volatile("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
+	}
+}
+
+void sendByte(uint8_t byte) {
+	for (uint8_t i = 0; i < 8; i++) {
+		sendBit(byte & (1 << (7 - i)));
+	}
+}
+
+void show(uint8_t (*colors)[3]) {
+	cli();
+	for (int i = 0; i < NUM_LEDS; i++) {
+		sendByte(colors[i][1]); // G
+		sendByte(colors[i][0]); // R
+		sendByte(colors[i][2]); // B
+	}
+	sei();
+	_delay_us(60);
+}
+
+void setLedRGB(uint8_t (*leds)[3], int ledIndex, uint8_t r, uint8_t g, uint8_t b) {
+	if (ledIndex < 0 || ledIndex >= NUM_LEDS) return;
+	leds[ledIndex][0] = r;
+	leds[ledIndex][1] = g;
+	leds[ledIndex][2] = b;
+}
+
+void fillAllLedsRGB(uint8_t r, uint8_t g, uint8_t b) {
+	for (int i = 0; i < NUM_LEDS; i++) {
+		setLedRGB(leds, i, r, g, b);
+	}
+}
+
+int main(void) {
+	UART_init();
+	ADC_init();
+	Servo_Init();
+	LED_Init();
+	DDRD |= (1 << LED_STRIP_PIN); 
+
+	_delay_ms(100);
+	UART_sendString("Sistema de lectura iniciado.\r\n");
+
+	while (1) {
+		uint16_t lectura = ADC_read(LDR_PIN);
+		char buffer[64];
+		sprintf(buffer, "Lectura LDR: %u\r\n", lectura);
+		UART_sendString(buffer);
+
+		const char *colorName;
+		uint8_t servoAngle;
+		uint8_t r, g, b;
+
+		if (lectura < 150) {
+			colorName = "ROJO";
+			r=255; g=0; b=0;
+			servoAngle = 150;
+		}
+		else if (lectura < 300) {
+			colorName = "VERDE";
+			r=0; g=255; b=0;
+			servoAngle = 30;
+		}
+		else if (lectura < 450) {
+			colorName = "AZUL";
+			r=0; g=0; b=255;
+			servoAngle = 90;
+		}
+		else if (lectura < 600) {
+			colorName = "AMARILLO";
+			r=255; g=255; b=0;
+			servoAngle = 90;
+		}
+		else if (lectura < 750) {
+			colorName = "MAGENTA";
+			r=255; g=0; b=255;
+			servoAngle = 30;
+		}
+		else {
+			colorName = "CIAN";
+			r=0; g=255; b=255;
+			servoAngle = 150;
+		}
+
+		sprintf(buffer, "Color detectado: %s\r\n", colorName);
+		UART_sendString(buffer);
+
+		fillAllLedsRGB(r,g,b);
+		show(leds);
+		Servo_SetAngle(servoAngle);
+		_delay_ms(1000);
+	}
+}
