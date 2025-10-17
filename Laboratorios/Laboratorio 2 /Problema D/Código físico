@@ -1,0 +1,244 @@
+// Este código se implementó en base al escrito en AVR puro usado para la simulación. 
+// Por una cuestión de agilizar y facilitar la prueba en físico se utilizó este código, ya que arduino ide incorpora una mayor cantidad de librerias, lo que deriva en una reduccion de los errores.
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <EEPROM.h>
+
+#define MAX_CLAVE 6
+#define ROWS 4
+#define COLS 4
+
+#define LED_VERDE 13
+#define LED_ROJO 12
+#define BUZZER 11
+
+char keys[ROWS][COLS] = {
+  {'1','2','3','A'},
+  {'4','5','6','B'},
+  {'7','8','9','C'},
+  {'*','0','#','D'}
+};
+uint8_t rowPins[ROWS] = {A0,A1,A2,A3};
+uint8_t colPins[COLS] = {2,3,4,6};
+
+LiquidCrystal_I2C lcd(0x27,16,2);
+
+char clave_guardada[MAX_CLAVE+1];
+uint8_t intentos_fallidos = 0;
+
+void guardar_clave_EEPROM(char *clave){
+  for(uint8_t i=0;i<MAX_CLAVE;i++){
+    if(i < strlen(clave)) EEPROM.update(i, clave[i]);
+    else EEPROM.update(i, 0xFF);
+  }
+}
+
+void leer_clave_EEPROM(char *clave){
+  bool vacia = true;
+  for(uint8_t i=0;i<MAX_CLAVE;i++){
+    byte b = EEPROM.read(i);
+    if(b==0xFF){
+      clave[i]='\0';
+      break;
+    }
+    clave[i] = b;
+    vacia = false;
+  }
+  if(vacia){
+    strcpy(clave,"1234");
+    guardar_clave_EEPROM(clave);
+  }
+}
+
+void keypad_init(){
+  for(uint8_t r=0;r<ROWS;r++){
+    pinMode(rowPins[r],OUTPUT);
+    digitalWrite(rowPins[r],HIGH);
+  }
+  for(uint8_t c=0;c<COLS;c++) pinMode(colPins[c],INPUT_PULLUP);
+}
+
+char keypad_getkey(){
+  for(uint8_t r=0;r<ROWS;r++){
+    for(uint8_t i=0;i<ROWS;i++) digitalWrite(rowPins[i],HIGH);
+    digitalWrite(rowPins[r],LOW);
+    for(uint8_t c=0;c<COLS;c++){
+      if(digitalRead(colPins[c])==LOW){
+        delay(50);
+        while(digitalRead(colPins[c])==LOW);
+        return keys[r][c];
+      }
+    }
+  }
+  return 0;
+}
+
+bool ingresar_clave(){
+  const uint8_t MIN_DIG = 4;
+  const uint8_t MAX_DIG = 6;
+  char clave_ingresada[MAX_CLAVE+1] = {0};
+  uint8_t index;
+  char key;
+
+  while(1){ 
+    index = 0;
+    memset(clave_ingresada,0,MAX_CLAVE+1);
+    lcd.clear(); lcd.setCursor(0,0); lcd.print("Ingrese clave:");
+
+    while(1){ 
+      key = keypad_getkey();
+      if(key){
+        if(key=='#'){ 
+          if(index < MIN_DIG){
+            lcd.setCursor(0,1); lcd.print("Min 4 digitos  ");
+            delay(1500);
+            break; 
+          }
+          clave_ingresada[index]='\0';
+          return strcmp(clave_ingresada,clave_guardada)==0;
+        }
+        if(key=='A'){ if(index>0) index--; clave_ingresada[index]='\0'; }
+        else if(index<MAX_DIG){ clave_ingresada[index++]=key; clave_ingresada[index]='\0'; }
+
+        lcd.setCursor(0,1);
+        for(uint8_t i=0;i<index;i++) lcd.print("*");
+        for(uint8_t i=index;i<MAX_DIG;i++) lcd.print(" ");
+      }
+    } 
+  } 
+}
+
+void cambiar_clave(){
+  const uint8_t MIN_DIG = 4;
+  const uint8_t MAX_DIG = 6;
+  char clave_actual[MAX_CLAVE+1] = {0};
+  char clave_nueva[MAX_CLAVE+1] = {0};
+  uint8_t index;
+  char key;
+
+  index = 0;
+  lcd.clear(); 
+  lcd.setCursor(0,0); 
+  lcd.print("Clave actual:");
+  while(1){
+    key = keypad_getkey();
+    if(key){
+      if(key=='#') break;
+      if(key=='A'){ if(index>0) index--; 
+      clave_actual[index]='\0'; }
+      else if(index<MAX_DIG){ clave_actual[index++]=key; clave_actual[index]='\0'; }
+
+      lcd.setCursor(0,1);
+      for(uint8_t i=0;i<index;i++) lcd.print("*");
+      for(uint8_t i=index;i<MAX_DIG;i++) lcd.print(" ");
+    }
+  }
+
+  if(strcmp(clave_actual,clave_guardada)!=0){
+    lcd.clear(); 
+    lcd.setCursor(0,0); 
+    lcd.print("Clave incorrecta");
+    digitalWrite(LED_ROJO,HIGH);
+    delay(2000);
+    digitalWrite(LED_ROJO,LOW);
+    return;
+  }
+
+  while(1){
+    index = 0;
+    memset(clave_nueva,0,MAX_CLAVE+1);
+    lcd.clear(); 
+    lcd.setCursor(0,0); 
+    lcd.print("Nueva clave:");
+
+    while(1){
+      key = keypad_getkey();
+      if(key){
+        if(key=='#'){
+          if(index < MIN_DIG){
+            lcd.setCursor(0,1); lcd.print("Min 4 digitos  ");
+            delay(1500);
+            break; // reinicia ingreso
+          }
+          strcpy(clave_guardada,clave_nueva);
+          guardar_clave_EEPROM(clave_guardada);
+          lcd.clear(); lcd.setCursor(0,0); lcd.print("Clave cambiada!");
+          delay(2000);
+          return;
+        }
+        if(key=='A'){ if(index>0) index--; clave_nueva[index]='\0'; }
+        else if(index<MAX_DIG){ clave_nueva[index++]=key; clave_nueva[index]='\0'; }
+
+        lcd.setCursor(0,1);
+        for(uint8_t i=0;i<index;i++) lcd.print("*");
+        for(uint8_t i=index;i<MAX_DIG;i++) lcd.print(" ");
+      }
+    }
+  }
+}
+
+void setup(){
+  lcd.init(); lcd.backlight();
+  keypad_init();
+
+  pinMode(LED_VERDE,OUTPUT);
+  pinMode(LED_ROJO,OUTPUT);
+  pinMode(BUZZER,OUTPUT);
+
+  digitalWrite(LED_VERDE,LOW);
+  digitalWrite(LED_ROJO,LOW);
+  digitalWrite(BUZZER,LOW);
+
+  leer_clave_EEPROM(clave_guardada);
+
+  lcd.clear(); lcd.setCursor(0,0); lcd.print("Bienvenido!");
+  delay(3000);
+}
+
+void loop(){
+
+  lcd.clear(); 
+  lcd.setCursor(0,0); 
+  lcd.print("1-Ingresar clave");
+  lcd.setCursor(0,1); 
+  lcd.print("2-Cambiar clave");
+
+  char opcion=0;
+  while(opcion!='1' && opcion!='2') opcion=keypad_getkey();
+
+  if(opcion=='1'){
+    if(ingresar_clave()){
+      lcd.clear(); 
+      lcd.setCursor(0,0); 
+      lcd.print("Clave correcta!");
+      digitalWrite(LED_VERDE,HIGH);
+      digitalWrite(LED_ROJO,LOW);
+      digitalWrite(BUZZER,LOW);
+      intentos_fallidos=0;
+    } else {
+      lcd.clear(); 
+      lcd.setCursor(0,0); 
+      lcd.print("Clave incorrecta");
+      digitalWrite(LED_ROJO,HIGH);
+      digitalWrite(LED_VERDE,LOW);
+      intentos_fallidos++;
+
+      if(intentos_fallidos>=3){
+        digitalWrite(BUZZER,HIGH);
+        lcd.setCursor(0,1); 
+        lcd.print("Alarma activada");
+        delay(3500);
+        digitalWrite(BUZZER,LOW);
+        intentos_fallidos=0;
+      }
+    }
+    delay(2000);
+    digitalWrite(LED_VERDE,LOW); digitalWrite(LED_ROJO,LOW);
+  }
+  else if(opcion=='2'){
+    cambiar_clave();
+  }
+
+  delay(500);
+}
