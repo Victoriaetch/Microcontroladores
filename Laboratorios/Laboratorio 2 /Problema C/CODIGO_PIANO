@@ -1,18 +1,19 @@
-#include <avr/io.h>
-#include <avr/interrupt.h> 
-#include <stdint.h>        
+#include <avr/io.h>    // Registros de E/S del microcontrolador AVR
+#include <avr/interrupt.h>     // Soporte para interrupciones
+#include <stdint.h>    // Tipos de enteros fijos (uint8_t, uint16_t)
 
-#define F_CPU 16000000UL
+#define F_CPU 16000000UL    // Frecuencia de reloj del CPU (16 MHz)
 
-#define BAUD 9600
-#define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
+#define BAUD 9600    // Tasa de baudios serial
+#define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)    // Calcula el valor UBRR para configurar la UART a 9600 bps
 
-#define BUZZER PB4
-#define NUM_BOTONES 8
+#define BUZZER PB4    // Pin de salida del buzzer
+#define NUM_BOTONES 8    // Total de teclas/pulsadores
 
-uint8_t botones[NUM_BOTONES] = {PC0, PC1, PC2, PC3, PC4, PC5, PD7, PD6}; 
-uint16_t notas_piano[NUM_BOTONES] = {262, 294, 330, 349, 392, 440, 494, 523};
+uint8_t botones[NUM_BOTONES] = {PC0, PC1, PC2, PC3, PC4, PC5, PD7, PD6};     // Pines asignados a los 8 botones
+uint16_t notas_piano[NUM_BOTONES] = {262, 294, 330, 349, 392, 440, 494, 523};    // Frecuencias (Hz) para el piano (C4-C5)
 
+// --- Constantes Musicales (Frecuencias) ---
 #define G3 196
 #define A3 220
 #define B3 247
@@ -25,77 +26,95 @@ uint16_t notas_piano[NUM_BOTONES] = {262, 294, 330, 349, 392, 440, 494, 523};
 #define B4 494
 #define C5 523
 
-#define NEGRA 400
+// --- Constantes de Duración (ms) ---
+#define NEGRA 400    // Duración base (negra = 400 ms)
 #define CORCHEA (NEGRA/2)
 #define BLANCA (NEGRA*2)
 #define SILENCIO_CORTE (NEGRA/2)
 #define SILENCIO_LARGO (NEGRA*2)
 
+// --- Declaración de Funciones para Control de Tiempo y Audio ---
 void retardo_microsegundos(uint16_t us);
 void generar_pulso(uint16_t freq); 
 void silencio(void);
 uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms); 
+
+// --- Funciones de Interrupción y Lógica de Control ---
 void chequear_interrupcion_uart(char char_recibido); 
 void chequear_interrupcion_rapida(void);
 
+// --- Máquina de Estados (Modos de Operación) ---
 typedef enum {
     ESTADO_P,
     ESTADO_1, 
     ESTADO_2  
 } Modo_Operacion;
 
-volatile Modo_Operacion estado_actual = ESTADO_P;
-volatile uint8_t cancion_activa = 0; 
+volatile Modo_Operacion estado_actual = ESTADO_P;    // Variable de estado: almacena el modo de operación actual
+volatile uint8_t cancion_activa = 0;     // Flag para indicar si una canción está en reproducción
 
+// --- Funciones de Comunicación Serial (UART) ---
 void UART_Init(void);
 void UART_PutChar(char data);
 char UART_CheckChar(void);
 void UART_PutString(const char *s);
 void mostrar_menu(void);
 
+// --- Funciones para la Lógica de los Modos ---
 void tarea_principal_p(void);
 void tarea_uno(void);
 void tarea_dos(void);
 
+// --- Funciones de Secuencia Musical ---
 void cancion1(void);
 void cancion2(void);
 
+// --- Implementación de Funciones de Control de Tiempo y Audio ---
 void retardo_microsegundos(uint16_t us) {
     uint32_t ciclos_por_us = (F_CPU / 1000000UL) / 4; 
     uint32_t total_ciclos = (uint32_t)us * ciclos_por_us;
 
+    // Bucle de retardo: decrementa el contador hasta llegar a cero
     while (total_ciclos-- > 0) {
+        // Instrucción 'No Operation' (nop) para consumir un ciclo de reloj de forma controlada
         asm volatile ("nop"); 
     }
 }
 
+// Genera un único ciclo de onda cuadrada en el pin del buzzer
 void generar_pulso(uint16_t freq) {
     if (freq == 0) return;
 
     uint32_t periodo_us = 1000000UL / (uint32_t)freq;
     uint16_t retardo_pulso_us = (uint16_t)(periodo_us / 2);
 
+    // Pulso ALTO: Enciende el buzzer
     PORTB |= (1<<BUZZER);
     retardo_microsegundos(retardo_pulso_us);
 
+    // Pulso BAJO: Apaga el buzzer
     PORTB &= ~(1<<BUZZER);
     retardo_microsegundos(retardo_pulso_us);
 }
 
+// Asegura que el pin del buzzer esté en bajo (silencio)
 void silencio(void){
     PORTB &= ~(1<<BUZZER);
 }
 
+// Reproduce un tono con una frecuencia y duración dadas
 uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms){
     if (!cancion_activa) {
         silencio();
-        return 1;
+        return 1;    // Devuelve 1 si la reproducción fue interrumpida ('S' presionado)
     }
 
+    // --- Lógica para Silencios (freq = 0 o dur_ms = 0) ---
     if (freq == 0 || dur_ms == 0) {
         uint32_t tiempo_restante_us = (uint32_t)dur_ms * 1000UL;
         uint16_t delay_chunk_us = 10000;
 
+        // Bucle para esperar el silencio mientras revisa la UART periódicamente
         while(tiempo_restante_us > 0) {
             uint16_t current_chunk_us = (tiempo_restante_us >= delay_chunk_us) ? delay_chunk_us : tiempo_restante_us;
             
@@ -106,24 +125,28 @@ uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms){
             
             tiempo_restante_us -= current_chunk_us;
         }
-        return 0;
+        return 0;    // Silencio completado sin interrupción
     }
 
+    // --- Lógica para Notas (freq > 0) ---
     uint32_t periodo_us = 1000000UL / (uint32_t)freq;
     uint32_t ciclos_onda = ((uint32_t)dur_ms * 1000UL) / periodo_us;
     uint16_t retardo_pulso_us = (uint16_t)(periodo_us / 2);
     
     uint16_t chequeo_counter = 0; 
 
+    // Contador para chequear interrupción cada 10 ciclos
     for(uint32_t i=0; i<ciclos_onda; i++){
-        if (!cancion_activa) break; 
-        
+        if (!cancion_activa) break;     // Sale si se detectó 'S'
+
+        // Genera un pulso completo (alto y bajo)
         PORTB |= (1<<BUZZER);
         retardo_microsegundos(retardo_pulso_us); 
 
         PORTB &= ~(1<<BUZZER);
         retardo_microsegundos(retardo_pulso_us); 
-        
+
+        // Chequea interrupción periódicamente para no afectar la frecuencia
         chequeo_counter++;
         if (chequeo_counter >= 10) { 
              chequear_interrupcion_rapida();
@@ -132,9 +155,10 @@ uint8_t reproducir_tono(uint16_t freq, uint16_t dur_ms){
     }
 
     silencio();
-    return !cancion_activa; 
+    return !cancion_activa;     // Retorna 1 si el bucle terminó por interrupción
 }
 
+// --- Implementación de Funciones de Comunicación Serial (UART) ---
 void UART_Init(void) {
     UBRR0H = (uint8_t)(UBRR_VALUE >> 8); 
     UBRR0L = (uint8_t)UBRR_VALUE;       
@@ -160,6 +184,7 @@ void UART_PutString(const char *s) {
     }
 }
 
+// Muestra el menú de opciones en la consola serial
 void mostrar_menu(void) {
     UART_PutString("\r\n--- Menú ---\r\n");
     UART_PutString("Seleccione una opción:\r\n");
@@ -169,7 +194,7 @@ void mostrar_menu(void) {
     UART_PutString("Modo actual: Piano libre\r\n");
 }
 
-
+// --- Implementación de Funciones de Control y Tarea ---
 void chequear_interrupcion_uart(char char_recibido) {
     if (char_recibido == 'S' || char_recibido == 's') {
         cancion_activa = 0; 
@@ -183,11 +208,13 @@ void chequear_interrupcion_rapida(void) {
     }
 }
 
+// Lógica para el modo Piano Libre (ESTADO_P)
 void tarea_principal_p(void) {
     uint8_t i;
     uint8_t presionado = 0; 
     int8_t nota_a_tocar_idx = -1; 
-    
+
+    // Recorre todos los pines de los botones
     for (i = 0; i < NUM_BOTONES; i++) {
         uint8_t estado;
         uint8_t pin_bit = botones[i];
@@ -198,43 +225,50 @@ void tarea_principal_p(void) {
             estado = !(PIND & (1 << pin_bit)); 
         }
         
-        if (estado) {  
+        if (estado) {      // Botón detectado como presionado
             nota_a_tocar_idx = i; 
             presionado = 1;
-            break; 
+            break;     // Solo interesa el primer botón presionado
         }
     }
 
+    // Ejecuta la acción
     if (presionado) {
-        generar_pulso(notas_piano[nota_a_tocar_idx]); 
+        generar_pulso(notas_piano[nota_a_tocar_idx]);     // Genera un pulso simple de la frecuencia asociada al botón
     } else {
-        silencio(); 
+        silencio();     // Si no hay botones, silencia
     }
 }
 
+// Lógica para el modo Canción 1 (ESTADO_1)
 void tarea_uno(void) {
     UART_PutString("\r\n--- Tocando 'El reino del revez - Maria Elena Walsh'. Presione 'S' para detener ---\r\n");
     cancion_activa = 1; 
-    cancion1();
-    
+    cancion1();    // Ejecuta la secuencia musical
+
+    // Al finalizar (o ser interrumpida)
     cancion_activa = 0; 
     silencio();
-    estado_actual = ESTADO_P; 
+    estado_actual = ESTADO_P;     // Vuelve al modo Piano
     UART_PutString("\r\n--- Detenido. Volviendo a Piano (P) ---\r\n");
 }
 
+// Lógica para el modo Canción 2 (ESTADO_2)
 void tarea_dos(void) {
     UART_PutString("\r\n--- Tocando 'Himno a la alegria- Ludwig van Beethoven'. Presione 'S' para detener ---\r\n");
     cancion_activa = 1; 
-    cancion2();
-    
+    cancion2();    // Ejecuta la secuencia musical
+
+    // Al finalizar (o ser interrumpida)
     cancion_activa = 0;
     silencio();
-    estado_actual = ESTADO_P;
+    estado_actual = ESTADO_P;    // Vuelve al modo Piano
     UART_PutString("\r\n--- Detenido. Volviendo a Piano libre---\r\n");
 }
 
+// --- Implementación de Secuencias Musicales ---
 void cancion1(void){
+    // Utiliza 'reproducir_tono' y revisa el valor de retorno para salir si fue interrumpida ('S')
     if(reproducir_tono(G3, CORCHEA*3/2)) return;
     if(reproducir_tono(G3, CORCHEA)) return;
     if(reproducir_tono(C4, CORCHEA)) return;
@@ -320,6 +354,7 @@ void cancion1(void){
 }
 
 void cancion2(void){
+    // Utiliza 'reproducir_tono' y revisa el valor de retorno para salir si fue interrumpida ('S')
     if(reproducir_tono(E4, NEGRA)) return; 
     if(reproducir_tono(E4, NEGRA)) return; 
     if(reproducir_tono(F4, NEGRA)) return; 
@@ -420,28 +455,32 @@ void cancion2(void){
 }
 
 int main(void) {
-    char opcion;
+    char opcion;    // Variable para almacenar el carácter recibido por la UART
 
+    // Configura el pin del buzzer (PB4) como salida
     DDRB |= (1 << BUZZER); 
-    silencio();
-    
+    silencio();    // Asegura que esté inicialmente apagado
+
+    // Configura los pines PC0-PC5 como entradas y habilita Pull-ups
     DDRC &= ~0x3F; 
     PORTC |= 0x3F; 
+    // Configura los pines PD6 y PD7 como entradas y habilita Pull-ups
     DDRD &= ~((1 << PD6) | (1 << PD7)); 
     PORTD |= ((1 << PD6) | (1 << PD7)); 
     
-    UART_Init();
+    UART_Init();    // Inicializa la comunicación serial
+    mostrar_menu();    // Muestra las opciones de modo al usuario
 
-    mostrar_menu();
-
+    // --- Bucle Principal de la Máquina de Estados ---
     while (1) {
         
-        opcion = UART_CheckChar(); 
+        opcion = UART_CheckChar();     // Intenta leer un carácter de la UART
 
-        if (opcion != 0) {
+        if (opcion != 0) {    // Si se recibió un carácter
             
             chequear_interrupcion_uart(opcion);
 
+            // Analiza la opción para cambiar el modo de operación
             switch (opcion) {
                 case '1':
                     if (estado_actual != ESTADO_1) {
@@ -469,18 +508,19 @@ int main(void) {
             }
         }
 
+        // Ejecución de la tarea principal según el estado actual
         switch (estado_actual) {
             case ESTADO_P:
-                tarea_principal_p();
+                tarea_principal_p();    // Modo Piano libre
                 break;
             case ESTADO_1:
-                tarea_uno(); 
+                tarea_uno();     // Ejecuta la Canción 1 y vuelve a ESTADO_P
                 break;
             case ESTADO_2:
-                tarea_dos(); 
+                tarea_dos();     // Ejecuta la Canción 2 y vuelve a ESTADO_P
                 break;
         }
     }
     
-    return 0; 
+    return 0;     // El programa nunca debería salir del bucle while(1)
 }
