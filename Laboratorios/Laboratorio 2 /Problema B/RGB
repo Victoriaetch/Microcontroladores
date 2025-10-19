@@ -1,3 +1,4 @@
+//Inclusion de librerias y definiciones
 #include <Arduino.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <math.h>
 #include <Adafruit_NeoPixel.h> 
 
+//Pines para RGB, LDR, servomotor y boton de calibración
 #define LED_R_PIN 8
 #define LED_G_PIN 9
 #define LED_B_PIN 10
@@ -13,18 +15,26 @@
 #define SERVO_PIN 11
 #define CALIBRATION_PIN 2
 
+// Configuración de la matriz 
 #define NEOPIXEL_PIN 6    
 #define NUM_PIXELS 64    
+
 Servo myServo;
 #define BAUDRATE 9600
 #define NUM_CALIBRATION_SAMPLES 30
-#define SIGMA_MULTIPLIER 3.0
+#define SIGMA_MULTIPLIER 3.0 // Factor estadístico para rango de color aceptable
 
+// Modo de operación del sistema
 enum Mode { NORMAL_MODE, CALIBRATION_MODE };
 Mode currentMode = NORMAL_MODE;
 
 Adafruit_NeoPixel strip(NUM_PIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
+// ============================================================================
+// ESTRUCTURA DE REFERENCIA DE COLOR Y PALETA BASE
+// Cada color tiene un nombre, valores de referencia RGB, ángulo del servo 
+// y un radio máximo de tolerancia (distancia euclidiana)
+// ============================================================================
 typedef struct {
     const char* name;
     uint16_t r_ref;
@@ -34,6 +44,7 @@ typedef struct {
     float max_radius;
 } ColorReference;
 
+// Paleta inicial de colores calibrados
 ColorReference colorPalette[] = {
     {"ROJO", 111, 74, 72, 0, 35.0},      
     {"VERDE", 101, 117, 71, 120, 35.0},  
@@ -44,13 +55,18 @@ ColorReference colorPalette[] = {
 };
 const uint8_t NUM_COLORS = sizeof(colorPalette) / sizeof(colorPalette[0]);
 
+// Variables para manejo del botón de calibración
 int lastButtonState = HIGH;
 long lastDebounceTime = 0;
 long debounceDelay = 50;
 int currentCalibrationIndex = 0;
 
+// ============================================================================
+// FUNCIÓN: setNeoPixelColor()
+// Cambia el color de todos los píxeles NeoPixel según el nombre del color dado
+// ============================================================================
 void setNeoPixelColor(const char* colorName) {
-    uint32_t color = strip.Color(0, 0, 0); 
+    uint32_t color = strip.Color(0, 0, 0);  // Color por defecto apagado
 
     if (strcmp(colorName, "ROJO") == 0) {
         color = strip.Color(255, 0, 0);
@@ -68,6 +84,7 @@ void setNeoPixelColor(const char* colorName) {
     } else {
     }
 
+    // Asigna el color a todos los LEDs del strip
     for (int i = 0; i < NUM_PIXELS; i++) {
         strip.setPixelColor(i, color);
     }
@@ -75,6 +92,10 @@ void setNeoPixelColor(const char* colorName) {
     strip.show(); 
 }
 
+/ ============================================================================
+// FUNCIÓN: ADC_Promedio()
+// Lee varias veces el canal analógico indicado y devuelve el promedio
+// ============================================================================
 uint16_t ADC_Promedio(uint8_t canal_analogico, uint8_t muestras) {
     uint32_t suma = 0;
     for (uint8_t i = 0; i < muestras; i++) {
@@ -84,9 +105,12 @@ uint16_t ADC_Promedio(uint8_t canal_analogico, uint8_t muestras) {
     return (uint16_t)(suma / muestras);
 }
 
+// ============================================================================
+// FUNCIONES DEL SERVO
+// ============================================================================
 void Servo_Init(void) {
     myServo.attach(SERVO_PIN);
-    myServo.write(0);
+    myServo.write(0);  // Posición inicial
 }
 
 void Servo_SetAngle(uint8_t angle) {
@@ -95,9 +119,12 @@ void Servo_SetAngle(uint8_t angle) {
 
 void Servo_Move_Delay(uint8_t angle) {
     Servo_SetAngle(angle);
-    delay(15);
+    delay(15); // Pequeño delay para estabilizar
 }
 
+// ============================================================================
+// FUNCIONES DE CONTROL DE LED RGB
+// ============================================================================
 void LED_RGB_Init(void) {
     pinMode(LED_R_PIN, OUTPUT);
     pinMode(LED_G_PIN, OUTPUT);
@@ -111,12 +138,15 @@ void LED_RGB(uint8_t r, uint8_t g, uint8_t b) {
     digitalWrite(LED_B_PIN, b ? HIGH : LOW);
 }
 
+// Enciende un color primario, mide la respuesta del LDR y la devuelve
 uint16_t medir_color(uint8_t r, uint8_t g, uint8_t b) {
     LED_RGB(r, g, b);
     delay(200);
     return ADC_Promedio(LDR_PIN, 10);
 }
 
+// Calcula la distancia euclidiana entre el color medido y las referencias.
+// Devuelve el color más cercano si está dentro del radio de tolerancia.
 const ColorReference* detectar_color_vectorial(uint16_t r, uint16_t g, uint16_t b) {
     float minDist = 1000000.0;
     const ColorReference* closestColor = NULL;
@@ -134,6 +164,7 @@ const ColorReference* detectar_color_vectorial(uint16_t r, uint16_t g, uint16_t 
         }
     }
 
+    // Verifica si la distancia está dentro del rango permitido
     if (closestColor != NULL && minDist > closestColor->max_radius) {
         return NULL;
     } else if (closestColor == NULL) {
@@ -143,6 +174,10 @@ const ColorReference* detectar_color_vectorial(uint16_t r, uint16_t g, uint16_t 
     return closestColor;
 }
 
+// ============================================================================
+// MODO DE CALIBRACIÓN: inicio, salida y proceso
+// ============================================================================
+// Inicia la calibración del sistema
 void startCalibrationMode() {
     currentMode = CALIBRATION_MODE;
     currentCalibrationIndex = 0;
@@ -153,6 +188,7 @@ void startCalibrationMode() {
     setNeoPixelColor("INDEFINIDO"); 
 }
 
+// Finaliza la calibración
 void exitCalibrationMode() {
     currentMode = NORMAL_MODE;
     LED_RGB(0, 0, 0);
@@ -160,6 +196,7 @@ void exitCalibrationMode() {
     Serial.println("--- MODO CALIBRACION FINALIZADO ---");
 }
 
+// Calibra el color actual midiendo N muestras y calculando media y sigma
 void calibrateCurrentColor() {
     uint16_t samples_r[NUM_CALIBRATION_SAMPLES];
     uint16_t samples_g[NUM_CALIBRATION_SAMPLES];
@@ -176,11 +213,13 @@ void calibrateCurrentColor() {
     Serial.println("...");
     setNeoPixelColor(colorPalette[currentCalibrationIndex].name); 
 
+    // Indicación visual de calibración
     LED_RGB(1, 1, 1);
     delay(100);
     LED_RGB(0, 0, 0);
     delay(100);
 
+    // Mide valores RGB promedio
     for (int i = 0; i < NUM_CALIBRATION_SAMPLES; i++) {
         samples_r[i] = medir_color(1, 0, 0);
         samples_g[i] = medir_color(0, 1, 0);
@@ -194,7 +233,8 @@ void calibrateCurrentColor() {
         delay(50);
     }
     setNeoPixelColor("INDEFINIDO");
-    
+
+    // Calcula medias y desviaciones estándar
     mean_r = (float)sum_r / NUM_CALIBRATION_SAMPLES;
     mean_g = (float)sum_g / NUM_CALIBRATION_SAMPLES;
     mean_b = (float)sum_b / NUM_CALIBRATION_SAMPLES;
@@ -212,12 +252,14 @@ void calibrateCurrentColor() {
     sigma_g = sqrt(variance_g);
     sigma_b = sqrt(variance_b);
 
+    // Calcula radio máximo de aceptación (3 sigma)
     max_radius = sqrt(
         pow(sigma_r * SIGMA_MULTIPLIER, 2) +
         pow(sigma_g * SIGMA_MULTIPLIER, 2) +
         pow(sigma_b * SIGMA_MULTIPLIER, 2)
     );
 
+    // Actualiza los valores de referencia del color calibrado
     colorPalette[currentCalibrationIndex].r_ref = (uint16_t)mean_r;
     colorPalette[currentCalibrationIndex].g_ref = (uint16_t)mean_g;
     colorPalette[currentCalibrationIndex].b_ref = (uint16_t)mean_b;
@@ -231,8 +273,8 @@ void calibrateCurrentColor() {
     Serial.print(" | Radio Sigma ("); Serial.print(SIGMA_MULTIPLIER); Serial.print("x): ");
     Serial.println(max_radius);
 
+    // Avanza al siguiente color o termina la calibración
     currentCalibrationIndex++;
-
     if (currentCalibrationIndex >= NUM_COLORS) {
         exitCalibrationMode();
     } else {
@@ -242,6 +284,11 @@ void calibrateCurrentColor() {
     }
 }
 
+// ============================================================================
+// FUNCIÓN: handleButton()
+// Gestiona el botón con antirrebote. Detecta pulsación corta (calibrar color)
+// o larga (entrar/salir de modo calibración).
+// ============================================================================
 void handleButton() {
     int reading = digitalRead(CALIBRATION_PIN);
 
@@ -258,13 +305,16 @@ void handleButton() {
                 pressDuration += 10;
             }
 
+            // Pulsación larga -> cambia modo
             if (pressDuration >= 3000) {
                 if (currentMode == NORMAL_MODE) {
                     startCalibrationMode();
                 } else {
                     exitCalibrationMode();
                 }
-            } else if (pressDuration > 50) {
+            } 
+            // Pulsación corta -> calibra color actual
+            else if (pressDuration > 50) {
                 if (currentMode == CALIBRATION_MODE) {
                     calibrateCurrentColor();
                 }
@@ -274,6 +324,9 @@ void handleButton() {
     lastButtonState = reading;
 }
 
+// ============================================================================
+// SETUP: inicializa periféricos y comunica instrucciones por serial
+// ============================================================================
 void setup() {
     Serial.begin(BAUDRATE);
     LED_RGB_Init();
@@ -286,8 +339,11 @@ void setup() {
     Serial.println("Mantenga presionado el boton (Pin 2) por 3s para CALIBRAR.");
 }
 
+// ============================================================================
+// LOOP PRINCIPAL: detección de color en modo normal o calibración
+// ============================================================================
 void loop() {
-    handleButton();
+    handleButton(); // Verifica pulsaciones
 
     if (currentMode == NORMAL_MODE) {
         uint16_t adc_r, adc_g, adc_b;
@@ -302,15 +358,18 @@ void loop() {
 
         detectedColor = detectar_color_vectorial(adc_r, adc_g, adc_b);
 
+        // Si se detecta color válido
         if (detectedColor != NULL) {
             colorName = detectedColor->name;
             servoAngle = detectedColor->angle;
-            
+
+            // Calcula la distancia al color de referencia
             float dr = (float)adc_r - (float)detectedColor->r_ref;
             float dg = (float)adc_g - (float)detectedColor->g_ref;
             float db = (float)adc_b - (float)detectedColor->b_ref;
             float minDist = sqrt(dr * dr + dg * dg + db * db);
-            
+
+            // Indica el color detectado con NeoPixel y LED RGB
             setNeoPixelColor(colorName);
             
             if (servoAngle == 0) {
@@ -325,6 +384,7 @@ void loop() {
             
             Servo_Move_Delay(servoAngle);
 
+            // Muestra información
             Serial.println("-------------------------------------");
             Serial.println("--- CLASIFICACION EXITOSA ---");
             
@@ -343,9 +403,10 @@ void loop() {
             Serial.println("-------------------------------------");
 
         } else {
+            // Si el color no coincide con ninguno
             colorName = "INDEFINIDO";
             servoAngle = 180; 
-            LED_RGB(0, 0, 1); 
+            LED_RGB(0, 0, 1);  // Azul = indefinido
 
             setNeoPixelColor("INDEFINIDO");
             
