@@ -1,12 +1,13 @@
 // Este còdigo se utilizó en la simulación, cuenta con lo mismo que el prinicpal a excepción de la calibración.
-// Se implementó en microchip
+// Se implementó en microchip studio
 
-#define F_CPU 16000000UL
-#include <avr/io.h>
-#include <util/delay.h>
-#include <stdio.h>
-#include <avr/interrupt.h>
+#define F_CPU 16000000UL    // Frecuencia del reloj del microcontrolador (16 MHz)
+#include <avr/io.h> 		// Librería principal de registros y periféricos del AVR
+#include <util/delay.h>		// Para funciones de delay
+#include <stdio.h>			// Para sprintf()
+#include <avr/interrupt.h>   // Para manejo de interrupciones
 
+// Definiciones de pines
 #define LDR_PIN 0
 #define LED_R PD2
 #define LED_G PD3
@@ -19,55 +20,65 @@
 #define LED_CIAN_G PC3
 #define LED_CIAN_B PC4
 
-#define BAUDRATE 9600
+// Comunicación UART
+#define BAUDRATE 9600 // Velocidad de transmisión UART (9600 bps)
 
-#define LED_STRIP_PIN PD6
-#define WIDTH 5
+// Configuración de tira LED RGB WS2812
+#define LED_STRIP_PIN PD6	// Pin de datos de la tira LED
+#define WIDTH 5				// Ancho de la matriz (5x5)
 #define HEIGHT 5
 #define NUM_LEDS (WIDTH * HEIGHT)
-uint8_t leds[NUM_LEDS][3];
+uint8_t leds[NUM_LEDS][3];		 // Matriz para almacenar los valores RGB de cada LED
 
+// Inicializa la comunicación UART (solo transmisión)
 void UART_init(void) {
-	uint16_t ubrr = (F_CPU / (16UL * BAUDRATE)) - 1;
+	uint16_t ubrr = (F_CPU / (16UL * BAUDRATE)) - 1; // Valor para el baud rate
 	UBRR0H = (uint8_t)(ubrr >> 8);
 	UBRR0L = (uint8_t)ubrr;
-	UCSR0B = (1 << TXEN0);
-	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00);
+	UCSR0B = (1 << TXEN0);							 // Habilita transmisión
+	UCSR0C = (1 << UCSZ01) | (1 << UCSZ00); 		 // Formato: 8 bits de datos, 1 bit de parada
 }
 
+// Envía un carácter por UART
 void UART_sendChar(char c) {
-	while (!(UCSR0A & (1 << UDRE0)));
+	while (!(UCSR0A & (1 << UDRE0))); // Espera hasta que el buffer esté libre
 	UDR0 = c;
 }
 
+// Envía una cadena de texto por UART
 void UART_sendString(const char *s) {
 	while (*s) UART_sendChar(*s++);
 }
 
+// Inicializa el conversor analógico-digital (ADC)
 void ADC_init(void) {
-	ADMUX = (1 << REFS0);
-	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1);
+	ADMUX = (1 << REFS0);   						      // Usa AVCC como referencia de tensión
+	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1);   // Habilita ADC, prescaler 64
 }
 
+// Lee un valor analógico de un canal (por ejemplo, el LDR)
 uint16_t ADC_read(uint8_t canal) {
-	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
-	ADCSRA |= (1 << ADSC);
-	while (ADCSRA & (1 << ADSC));
+	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);			// Selecciona el canal
+	ADCSRA |= (1 << ADSC);								// Inicia conversión
+	while (ADCSRA & (1 << ADSC));						// Espera que termine
 	return ADC;
 }
 
+// Inicializa el PWM del Timer1 para controlar un servomotor
 void Servo_Init(void) {
-	DDRB |= (1 << PB1);
-	TCCR1A = (1 << COM1A1) | (1 << WGM11);
-	TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11);
-	ICR1 = 39999; 
+	DDRB |= (1 << PB1);  								 	// PB1 (OC1A) como salida
+	TCCR1A = (1 << COM1A1) | (1 << WGM11); 					// Modo PWM no inversor
+	TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS11); 	// Modo rápido con prescaler 8
+	ICR1 = 39999;  											// Periodo de 20 ms (50 Hz)
 }
 
+// Ajusta el ángulo del servo (0° a 180°)
 void Servo_SetAngle(uint8_t angle) {
-	uint16_t pulse_us = 1000 + (angle * 1000UL / 180);
-	OCR1A = pulse_us * 2; 
+	uint16_t pulse_us = 1000 + (angle * 1000UL / 180);	// Mapea 0°→1ms, 180°→2ms
+	OCR1A = pulse_us * 2; 								// Conversión a ticks del timer
 }
 
+// Inicializa los pines de salida para LEDs
 void LED_Init(void) {
 	DDRD |= (1 << LED_R) | (1 << LED_G) | (1 << LED_B) | (1 << LED_Y);
 	PORTD |= (1 << LED_R) | (1 << LED_G) | (1 << LED_B) | (1 << LED_Y);
@@ -79,13 +90,16 @@ void LED_Init(void) {
 	PORTC |= (1 << LED_CIAN_G) | (1 << LED_CIAN_B);
 }
 
+// Envía un bit a la tira LED con temporización precisa
 void sendBit(uint8_t bitVal) {
 	if (bitVal) {
+		// Pulso alto largo representa '1'
 		PORTD |= (1 << LED_STRIP_PIN);
 		asm volatile("nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t""nop\n\t");
 		PORTD &= ~(1 << LED_STRIP_PIN);
 		asm volatile("nop\n\t""nop\n\t""nop\n\t""nop\n\t");
 		} else {
+		// Pulso alto corto representa '0'
 		PORTD |= (1 << LED_STRIP_PIN);
 		asm volatile("nop\n\t""nop\n\t""nop\n\t");
 		PORTD &= ~(1 << LED_STRIP_PIN);
@@ -93,23 +107,26 @@ void sendBit(uint8_t bitVal) {
 	}
 }
 
+// Envía un byte (8 bits) a la tira LED
 void sendByte(uint8_t byte) {
 	for (uint8_t i = 0; i < 8; i++) {
 		sendBit(byte & (1 << (7 - i)));
 	}
 }
 
+// Envía los valores RGB almacenados en la matriz 'leds' a la tira WS2812
 void show(uint8_t (*colors)[3]) {
-	cli();
+	cli();  								// Desactiva interrupciones
 	for (int i = 0; i < NUM_LEDS; i++) {
 		sendByte(colors[i][1]); // G
 		sendByte(colors[i][0]); // R
 		sendByte(colors[i][2]); // B
 	}
-	sei();
-	_delay_us(60);
+	sei();									// Reactiva interrupciones
+	_delay_us(60);							// Tiempo de reset de la tira
 }
 
+// Configura el color de un LED específico en la matriz
 void setLedRGB(uint8_t (*leds)[3], int ledIndex, uint8_t r, uint8_t g, uint8_t b) {
 	if (ledIndex < 0 || ledIndex >= NUM_LEDS) return;
 	leds[ledIndex][0] = r;
@@ -117,32 +134,37 @@ void setLedRGB(uint8_t (*leds)[3], int ledIndex, uint8_t r, uint8_t g, uint8_t b
 	leds[ledIndex][2] = b;
 }
 
+// Establece un color en todos los LEDs
 void fillAllLedsRGB(uint8_t r, uint8_t g, uint8_t b) {
 	for (int i = 0; i < NUM_LEDS; i++) {
 		setLedRGB(leds, i, r, g, b);
 	}
 }
 
+// --------------------------- MAIN ---------------------------
 int main(void) {
 	UART_init();
 	ADC_init();
 	Servo_Init();
 	LED_Init();
-	DDRD |= (1 << LED_STRIP_PIN); 
+	DDRD |= (1 << LED_STRIP_PIN); 		 // Pin de datos de la tira como salida
 
 	_delay_ms(100);
 	UART_sendString("Sistema de lectura iniciado.\r\n");
 
 	while (1) {
+		// Lectura del LDR
 		uint16_t lectura = ADC_read(LDR_PIN);
 		char buffer[64];
 		sprintf(buffer, "Lectura LDR: %u\r\n", lectura);
 		UART_sendString(buffer);
 
+		// Variables para el color detectado y servo
 		const char *colorName;
 		uint8_t servoAngle;
 		uint8_t r, g, b;
 
+		// Clasificación según el nivel de luz (simulación)
 		if (lectura < 150) {
 			colorName = "ROJO";
 			r=255; g=0; b=0;
@@ -174,9 +196,11 @@ int main(void) {
 			servoAngle = 150;
 		}
 
+		// Envía por UART el color detectado
 		sprintf(buffer, "Color detectado: %s\r\n", colorName);
 		UART_sendString(buffer);
 
+		// Actualiza la tira LED y el servo
 		fillAllLedsRGB(r,g,b);
 		show(leds);
 		Servo_SetAngle(servoAngle);
