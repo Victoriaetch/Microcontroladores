@@ -2,8 +2,8 @@
 // Por una cuestión de agilizar y facilitar la prueba en físico se utilizó este código, ya que arduino ide incorpora una mayor cantidad de librerias, lo que deriva en una reduccion de los errores.
 
 #include <Wire.h>
-#include <LiquidCrystal_I2C.h>
-#include <EEPROM.h>
+#include <LiquidCrystal_I2C.h> // Librería LCD I2C
+#include <EEPROM.h>  // Librería para leer/escribir EEPROM
 
 #define MAX_CLAVE 6
 #define ROWS 4
@@ -13,67 +13,75 @@
 #define LED_ROJO 12
 #define BUZZER 11
 
+// Matriz de teclas del keypad
 char keys[ROWS][COLS] = {
   {'1','2','3','A'},
   {'4','5','6','B'},
   {'7','8','9','C'},
   {'*','0','#','D'}
 };
+// Pines conectados a filas y columnas del keypad
 uint8_t rowPins[ROWS] = {A0,A1,A2,A3};
 uint8_t colPins[COLS] = {2,3,4,6};
 
 LiquidCrystal_I2C lcd(0x27,16,2);
 
-char clave_guardada[MAX_CLAVE+1];
-uint8_t intentos_fallidos = 0;
+// Variables globales
+char clave_guardada[MAX_CLAVE+1]; // Clave almacenada
+uint8_t intentos_fallidos = 0; // Contador de intentos fallidos
 
+// Función para guardar clave en EEPROM
 void guardar_clave_EEPROM(char *clave){
   for(uint8_t i=0;i<MAX_CLAVE;i++){
     if(i < strlen(clave)) EEPROM.update(i, clave[i]);
-    else EEPROM.update(i, 0xFF);
+    else EEPROM.update(i, 0xFF); // Rellenar con 0xFF si sobra espacio
   }
 }
 
+// Función para leer clave de EEPROM
 void leer_clave_EEPROM(char *clave){
   bool vacia = true;
   for(uint8_t i=0;i<MAX_CLAVE;i++){
     byte b = EEPROM.read(i);
-    if(b==0xFF){
+    if(b==0xFF){ // EEPROM vacía
       clave[i]='\0';
       break;
     }
     clave[i] = b;
     vacia = false;
   }
-  if(vacia){
+  if(vacia){  // Inicializa con "1234" si EEPROM está vacía
     strcpy(clave,"1234");
     guardar_clave_EEPROM(clave);
   }
 }
 
+// Inicialización de keypad
 void keypad_init(){
   for(uint8_t r=0;r<ROWS;r++){
     pinMode(rowPins[r],OUTPUT);
-    digitalWrite(rowPins[r],HIGH);
+    digitalWrite(rowPins[r],HIGH); // filas en HIGH
   }
-  for(uint8_t c=0;c<COLS;c++) pinMode(colPins[c],INPUT_PULLUP);
+  for(uint8_t c=0;c<COLS;c++) pinMode(colPins[c],INPUT_PULLUP); // columnas con pull-up
 }
 
+// Lectura de tecla presionada en el keypad
 char keypad_getkey(){
   for(uint8_t r=0;r<ROWS;r++){
-    for(uint8_t i=0;i<ROWS;i++) digitalWrite(rowPins[i],HIGH);
-    digitalWrite(rowPins[r],LOW);
+    for(uint8_t i=0;i<ROWS;i++) digitalWrite(rowPins[i],HIGH); // reset filas
+    digitalWrite(rowPins[r],LOW); // activa fila actual
     for(uint8_t c=0;c<COLS;c++){
-      if(digitalRead(colPins[c])==LOW){
+      if(digitalRead(colPins[c])==LOW){ // detecta presión
         delay(50);
-        while(digitalRead(colPins[c])==LOW);
+        while(digitalRead(colPins[c])==LOW); // espera a soltar
         return keys[r][c];
       }
     }
   }
-  return 0;
+  return 0; // ninguna tecla presionada
 }
 
+// Función para ingresar clave y validar
 bool ingresar_clave(){
   const uint8_t MIN_DIG = 4;
   const uint8_t MAX_DIG = 6;
@@ -101,6 +109,7 @@ bool ingresar_clave(){
         if(key=='A'){ if(index>0) index--; clave_ingresada[index]='\0'; }
         else if(index<MAX_DIG){ clave_ingresada[index++]=key; clave_ingresada[index]='\0'; }
 
+         // Muestra asteriscos en LCD
         lcd.setCursor(0,1);
         for(uint8_t i=0;i<index;i++) lcd.print("*");
         for(uint8_t i=index;i<MAX_DIG;i++) lcd.print(" ");
@@ -109,6 +118,7 @@ bool ingresar_clave(){
   } 
 }
 
+// Función para cambiar clave
 void cambiar_clave(){
   const uint8_t MIN_DIG = 4;
   const uint8_t MAX_DIG = 6;
@@ -117,6 +127,7 @@ void cambiar_clave(){
   uint8_t index;
   char key;
 
+  // Ingreso de clave actual
   index = 0;
   lcd.clear(); 
   lcd.setCursor(0,0); 
@@ -135,6 +146,7 @@ void cambiar_clave(){
     }
   }
 
+  // Verifica clave actual
   if(strcmp(clave_actual,clave_guardada)!=0){
     lcd.clear(); 
     lcd.setCursor(0,0); 
@@ -144,7 +156,7 @@ void cambiar_clave(){
     digitalWrite(LED_ROJO,LOW);
     return;
   }
-
+  // Ingreso de nueva clave
   while(1){
     index = 0;
     memset(clave_nueva,0,MAX_CLAVE+1);
@@ -170,6 +182,7 @@ void cambiar_clave(){
         if(key=='A'){ if(index>0) index--; clave_nueva[index]='\0'; }
         else if(index<MAX_DIG){ clave_nueva[index++]=key; clave_nueva[index]='\0'; }
 
+        // Muestra asteriscos en LCD
         lcd.setCursor(0,1);
         for(uint8_t i=0;i<index;i++) lcd.print("*");
         for(uint8_t i=index;i<MAX_DIG;i++) lcd.print(" ");
@@ -178,6 +191,7 @@ void cambiar_clave(){
   }
 }
 
+// Configuración inicial
 void setup(){
   lcd.init(); lcd.backlight();
   keypad_init();
@@ -205,7 +219,7 @@ void loop(){
   lcd.print("2-Cambiar clave");
 
   char opcion=0;
-  while(opcion!='1' && opcion!='2') opcion=keypad_getkey();
+  while(opcion!='1' && opcion!='2') opcion=keypad_getkey();  // espera opción válida
 
   if(opcion=='1'){
     if(ingresar_clave()){
@@ -224,6 +238,7 @@ void loop(){
       digitalWrite(LED_VERDE,LOW);
       intentos_fallidos++;
 
+      // Si hay 3 intentos fallidos, activar alarma
       if(intentos_fallidos>=3){
         digitalWrite(BUZZER,HIGH);
         lcd.setCursor(0,1); 
@@ -240,5 +255,5 @@ void loop(){
     cambiar_clave();
   }
 
-  delay(500);
+  delay(500); // retardo antes de repetir menú
 }
