@@ -1,57 +1,71 @@
-//Estructura incial, faltan comentarios
+#define PCF8574 0x27 // Dirección del módulo 
 
-#define PCF8574 0x27
-#define F_CPU 16000000UL
-#include <avr/io.h>
+#define F_CPU 16000000UL // Frecuencia del microcontrolador
+
+#include <avr/io.h> 
 #include <util/delay.h>
 #include <string.h>
 #include <avr/eeprom.h>
-#include "twi_lcd.h"
+#include "twi_lcd.h" // Libería para manejar la LCD mediante I2C
 
-#define EEPROM_ADDR_CLAVE 0x00
-#define MAX_CLAVE 8
+#define EEPROM_ADDR_CLAVE 0x00 // Dirección inicial en EEPROM para guardar la clave
+
+// Configuración de tamaño máximo de la clave y teclado
+#define MAX_CLAVE 6
 #define ROWS 4
 #define COLS 4
 
+// Definición de la matriz de teclas del keypad
 char keys[ROWS][COLS] = {
 	{'1','2','3','A'},
 	{'4','5','6','B'},
 	{'7','8','9','C'},
 	{'*','0','#','D'}
 };
+// Pines conectados a las filas y columnas del keypad
 uint8_t rowPins[ROWS] = {PC0, PC1, PC2, PC3};
 uint8_t colPins[COLS] = {PD2, PD3, PD4, PD6};
 
+// Función para guardar clave en la EEPROM
 void guardar_clave_EEPROM(char *clave) {
 	eeprom_write_block((const void*)clave, (void*)EEPROM_ADDR_CLAVE, MAX_CLAVE);
 }
 
+// Función para leer clave desde la EEPROM
 void leer_clave_EEPROM(char *clave) {
 	eeprom_read_block((void*)clave, (const void*)EEPROM_ADDR_CLAVE, MAX_CLAVE);
 }
 
+// Inicialización del teclado matricial
 void keypad_init(void) {
+	// Configura filas como salidas y las pone en alto
 	DDRC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
 	PORTC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
+	// Configura columnas como entradas con pull-up
 	DDRD &= ~((1<<PD2)|(1<<PD3)|(1<<PD4)|(1<<PD6));
 	PORTD |= (1<<PD2)|(1<<PD3)|(1<<PD4)|(1<<PD6);
 }
 
+// Lectura de la tecla presionada
 char keypad_getkey(void) {
+	// Pone todas las filas en alto
 	for (uint8_t r=0;r<ROWS;r++){
 		PORTC |= (1<<PC0)|(1<<PC1)|(1<<PC2)|(1<<PC3);
+		// Baja la fila actual
 		PORTC &= ~(1<<rowPins[r]);
 		for(uint8_t c=0;c<COLS;c++){
+			// Si columna detecta presión (LOW)
 			if(!(PIND & (1<<colPins[c]))){
 				_delay_ms(50);
-				while(!(PIND & (1<<colPins[c])));
-				return keys[r][c];
+				while(!(PIND & (1<<colPins[c]))); // espera a soltar
+				return keys[r][c];// devuelve tecla
 			}
 		}
 	}
-	return 0;
+	return 0 // ninguna tecla presionada
 }
 
+// Función para ingresar la clave y validarla
 uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
 	char clave_ingresada[MAX_CLAVE+1];
 	uint8_t index;
@@ -77,11 +91,11 @@ uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
 						break;  // reinicia ingreso
 					}
 					// comparar clave
-					if(strcmp(clave_ingresada, clave_guardada) == 0) return 1;
-					else return 0;
+					if(strcmp(clave_ingresada, clave_guardada) == 0) return 1; // correcta
+					else return 0; // incorrecta
 				}
 
-				if(key == 'A') {  // borrar
+				if(key == 'A') {  // borra el último dígito
 					if(index > 0) index--;
 					clave_ingresada[index] = '\0';
 				}
@@ -89,6 +103,7 @@ uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
 					clave_ingresada[index++] = key;
 					clave_ingresada[index] = '\0';
 				}
+				// Actualiza LCD con asteriscos
 				twi_lcd_cmd(0xC0);
 				twi_lcd_clear();
 				twi_lcd_cmd(0x80);
@@ -100,12 +115,14 @@ uint8_t ingresar_clave(char *clave_guardada, uint8_t max_len) {
 	}
 }
 
+// Función para cambiar la clave
 void cambiar_clave(char *clave_guardada, uint8_t max_len) {
 	char clave_actual[MAX_CLAVE+1] = {0};
 	char clave_nueva[MAX_CLAVE+1] = {0};
 	uint8_t index;
 	char key;
 
+	// Ingreso de clave actual
 	index = 0;
 	twi_lcd_clear();
 	twi_lcd_cmd(0x80);
@@ -118,7 +135,8 @@ void cambiar_clave(char *clave_guardada, uint8_t max_len) {
 			if(key == '#') break;  // confirmar
 			if(key == 'A'){ if(index>0) index--; clave_actual[index]='\0'; }
 			else if(index < max_len) { clave_actual[index++] = key; clave_actual[index]='\0'; }
-            
+
+			// Actualiza LCD con asteriscos
             twi_lcd_cmd(0xC0);
 			twi_lcd_clear();
 			twi_lcd_cmd(0x80);
@@ -221,7 +239,7 @@ int main(void){
 		twi_lcd_msg("2-Cambiar clave");
 
 		do{
-			opcion = keypad_getkey();
+			opcion = keypad_getkey();  // espera opción válida
 		}while(opcion!='1' && opcion!='2');
 
 		if(opcion=='1'){
