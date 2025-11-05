@@ -1,1 +1,204 @@
+// Falta comentar (ya se probó el código)
+#define F_CPU 16000000UL
+#define NUM_LEDS 64
+#define ANCHO 8
+#define ALTO 8
+#define DATA_PIN PD6      
+#define DEADZONE 200   
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+#include <stdlib.h>
+#include <stdbool.h>
+  
+typedef struct {
+	uint8_t r;
+	uint8_t g;
+	uint8_t b;
+} Color;
+
+Color leds[NUM_LEDS];
+uint8_t posX = 3;
+uint8_t posY = 3;
+Color colorActual;
+
+uint16_t ADC_CENTER_X = 512; // Centro para Eje X (Canal 1)
+uint16_t ADC_CENTER_Y = 512; // Centro para Eje Y (Canal 0)
+
+void ADC_init(void) {
+	ADMUX = (1 << REFS0); // referencia AVcc
+	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1); // habilitar ADC, prescaler 64
+}
+
+uint16_t ADC_read(uint8_t canal) {
+	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
+	ADCSRA |= (1 << ADSC);
+	while (ADCSRA & (1 << ADSC));
+	return ADC;
+}
+
+// Calibración del Joystick 
+void calibrarJoystick(void) {
+	uint32_t sumY = 0; // Usando Canal 0 para el eje Y
+	uint32_t sumX = 0; // Usando Canal 1 para el eje X
+	int num_muestras = 50;
+
+	for (int i = 0; i < num_muestras; i++) {
+		sumY += ADC_read(0); // Canal 0 (Movimiento Vertical/Eje Y)
+		sumX += ADC_read(1); // Canal 1 (Movimiento Horizontal/Eje X)
+		_delay_ms(5);
+	}
+
+	ADC_CENTER_Y = (uint16_t)(sumY / num_muestras);
+	ADC_CENTER_X = (uint16_t)(sumX / num_muestras);
+}
+
+// Lectura joystick 
+int leerMovimiento(uint8_t canal) {
+	int valor = ADC_read(canal);
+	uint16_t centro;
+
+	if (canal == 0) {
+		centro = ADC_CENTER_Y; // Centro calibrado para Eje Y (Canal 0)
+		} else {
+		centro = ADC_CENTER_X; // Centro calibrado para Eje X (Canal 1)
+	}
+
+	if (valor > (centro - DEADZONE) && valor < (centro + DEADZONE)) return 0;
+
+	return (valor > centro) ? 1 : -1;
+}
+
+// Lectura botón SW 
+bool botonPresionado(void) {
+	return !(PIND & (1 << PD2)); // activo en bajo con pull-up
+}
+
+// color aleatorio 
+void generarColorAleatorio(Color *c) {
+	do {
+		c->r = rand() % 256;
+		c->g = rand() % 256;
+		c->b = rand() % 256;
+	} while (c->r + c->g + c->b == 0); // Evitar negro puro
+}
+
+uint8_t indexLed(uint8_t x, uint8_t y) {
+	return y * ANCHO + x;
+}
+
+void ws2812_send(Color *leds, uint16_t num_leds) {
+	cli();
+
+	for (uint16_t i = 0; i < num_leds; i++) {
+		uint8_t colors[3] = { leds[i].g, leds[i].r, leds[i].b }; // G-R-B
+		for (uint8_t k = 0; k < 3; k++) {
+			uint8_t mask = 0x80;
+			while (mask) {
+				if (colors[k] & mask) {
+					PORTD |= (1 << DATA_PIN);
+					__asm__ __volatile__("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n");
+					PORTD &= ~(1 << DATA_PIN);
+					__asm__ __volatile__("nop\n nop\n nop\n nop\n nop\n");
+					} else {
+					PORTD |= (1 << DATA_PIN);
+					__asm__ __volatile__("nop\n nop\n nop\n");
+					PORTD &= ~(1 << DATA_PIN);
+					__asm__ __volatile__("nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n nop\n");
+				}
+				mask >>= 1;
+			}
+		}
+	}
+
+	sei();
+	_delay_us(50);
+}
+
+int main(void) {
+	// Configuración de pines de E/S
+	DDRD |= (1 << DATA_PIN);
+	DDRD &= ~(1 << PD2);
+	PORTD |= (1 << PD2);
+
+	ADC_init();
+	
+	calibrarJoystick();
+	
+	uint32_t semilla = 0;
+	for (int i = 0; i < 50; i++) {
+		semilla += ADC_read(0);
+		_delay_us(100);
+	}
+	srand((unsigned int)semilla);
+
+	generarColorAleatorio(&colorActual);
+
+
+	while(1) {
+
+		int movY_raw = leerMovimiento(0);
+		int movX_raw = leerMovimiento(1);
+		
+		int movX = movX_raw;
+		int movY = movY_raw;
+		
+		uint8_t moved = 0;
+
+		// Movimiento Vertical 
+		if (movY != 0) {
+			int direccionY = movY;
+			
+			// movY=1 (Alto) = Subir (posY--)
+			if (direccionY == 1 && posY > 0) {
+				posY--;
+				moved = 1;
+			}
+			// movY=-1 (Bajo) = Bajar (posY++)
+			else if (direccionY == -1 && posY < ALTO - 1) {
+				posY++;
+				moved = 1;
+			}
+		}
+
+		// Movimiento Horizontal 
+		else if (movX != 0) {
+			int direccionX = movX;
+
+			if (direccionX == 1 && posX < ANCHO - 1) { // Derecha
+				posX++;
+				moved = 1;
+			}
+			else if (direccionX == -1 && posX > 0) { // Izquierda
+				posX--;
+				moved = 1;
+			}
+		}
+
+		if (moved) {
+			_delay_ms(300);
+		}
+		
+		// Cambio de Color (Botón SW) 
+		if (botonPresionado()) {
+			_delay_ms(50);
+			if (botonPresionado()) {
+				generarColorAleatorio(&colorActual);
+				while (botonPresionado());
+			}
+		}
+
+		// Actualización de la Matriz
+		for (uint8_t i = 0; i < NUM_LEDS; i++) {
+			leds[i].r = 0;
+			leds[i].g = 0;
+			leds[i].b = 0;
+		}
+		
+		leds[indexLed(posX,posY)] = colorActual;
+		
+		ws2812_send(leds, NUM_LEDS);
+	}
+}
 
