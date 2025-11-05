@@ -81,10 +81,10 @@ void write_stored_uid(const uint8_t *buf) {
 
 void clear_stored_uid(void) {
 	uint8_t clear[10];  // revisar si es 5 o 10
-	for (uint8_t i=0; i<10; i++) {
+	for (uint8_t i=0; i<10; i++) 
 		clear[i]=0xFF;
 	write_stored_uid(clear); //revisar esta tmb
-	}
+	
 }
 
 
