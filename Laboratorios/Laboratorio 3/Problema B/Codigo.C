@@ -108,6 +108,7 @@ int main(void) {
 	uint8_t heater_state = 0;
 	uint8_t fan_state = 0;
 	static char comando_buffer[10];
+	static uint8_t comando_idx = 0;
 
 	show_menu(punto_medio);
 
