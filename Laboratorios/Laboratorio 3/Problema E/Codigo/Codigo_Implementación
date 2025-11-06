@@ -197,33 +197,33 @@ int main(void)
 			PORTD &= ~(1<<LED_ROJO);
 		}
 
-			  else if (memcmp(card_uid, stored_uid, UID_LEN) == 0) {
-				  PORTD |= (1<<LED_VERDE);
-				  display_and_log("Acceso","permitido!","Acceso permitido!!");
-				  _delay_ms(5000);
-				  PORTD &= ~(1<<LED_VERDE);
+		else if (memcmp(card_uid, stored_uid, UID_LEN) == 0) {
+			  PORTD |= (1<<LED_VERDE);
+			  display_and_log("Acceso","permitido!","Acceso permitido!!");
+			  _delay_ms(5000);
+			  PORTD &= ~(1<<LED_VERDE);
 
-				  } else {
-				  PORTD |= (1<<LED_ROJO);
-				  display_and_log("Acceso","denegado!","Acceso denegado");
-				  _delay_ms(5000);
-				  PORTD &= ~(1<<LED_ROJO);
-			  }
-
-			  // esperar hasta que tarjeta se retire
-			  while (1) {
-				  memset(card_uid, 0, UID_LEN);
-				  mfrc522_standard(card_uid);
-				  if (card_uid[0] == 0) break;
-				  _delay_ms(500);
-			  }
+			  } else {
+			  PORTD |= (1<<LED_ROJO);
+			  display_and_log("Acceso","denegado!","Acceso denegado");
+			  _delay_ms(5000);
+			  PORTD &= ~(1<<LED_ROJO);
 		  }
 
-		  _delay_ms(1000); // pausa entre lecturas normal
-		      display_and_log("Acerque tarjeta", "para acceder", NULL);
-
+		  // esperar hasta que tarjeta se retire
+		  while (1) {
+			  memset(card_uid, 0, UID_LEN);
+			  mfrc522_standard(card_uid);
+			  if (card_uid[0] == 0) break;
+			  _delay_ms(500);
+		  }
 	  }
+
+	  _delay_ms(1000); // pausa entre lecturas normal
+		  display_and_log("Acerque tarjeta", "para acceder", NULL);
+
   }
+}
 
 //RUTINAS DE INTERRUPCION
 ISR(INT0_vect) { // BORRAR
