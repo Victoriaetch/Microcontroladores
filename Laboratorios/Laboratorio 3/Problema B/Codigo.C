@@ -1,3 +1,4 @@
+#define F_CPU 16000000UL
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdio.h>
@@ -5,7 +6,6 @@
 #include <stdlib.h>
 #include <avr/pgmspace.h>
 
-#define F_CPU 16000000UL
 #define BAUD 9600
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
 #define MAX_DATOS 100 
