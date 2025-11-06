@@ -1,4 +1,3 @@
-#define F_CPU 16000000UL
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdio.h>
@@ -6,8 +5,16 @@
 #include <stdlib.h>
 #include <avr/pgmspace.h>
 
+#define F_CPU 16000000UL
 #define BAUD 9600
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
+#define MAX_DATOS 100 
+
+float datos_temp[MAX_DATOS];
+uint8_t datos_heat[MAX_DATOS];
+uint8_t datos_fan[MAX_DATOS];
+uint8_t datos_pm[MAX_DATOS];
+uint8_t indice_datos = 0;
 
 void UART_send(char c) {
 	while (!(UCSR0A & (1<<UDRE0)));
@@ -98,76 +105,106 @@ int main(void) {
 	char new_pm_buffer[4] = {0};
 	uint8_t idx = 0;
 	char received_char;
+	uint8_t heater_state = 0;
+	uint8_t fan_state = 0;
+	static char comando_buffer[10];
 
-	set_fan_speed(0);
-	set_heater_power(0);
 	show_menu(punto_medio);
 
-	while(1) {
-		// Lectura UART
-		received_char = UART_check_receive();
-		if (received_char != 0) {
-			if (received_char >= '0' && received_char <= '9' && idx < 3) {
-				new_pm_buffer[idx++] = received_char;
-			}
-			else if (received_char == '\n' || received_char == '\r') {
-				new_pm_buffer[idx] = '\0';
-				if (idx > 0) {
-					uint8_t nuevo_pm = (uint8_t)atoi(new_pm_buffer);
-					if (nuevo_pm <= 99) {
-						punto_medio = nuevo_pm;
-						sprintf(buffer,"\n*** PM actualizado a %dC ***\n", punto_medio);
-						UART_print(buffer);
-						show_menu(punto_medio);
+	while (1) {
+
+		for (uint8_t t = 0; t < 20; t++) {
+
+			received_char = UART_check_receive();
+			if (received_char != 0) {
+				if (received_char != '\r' && received_char != '\n') {
+					if (comando_idx < sizeof(comando_buffer) - 1)
+					comando_buffer[comando_idx++] = received_char;
+
+					if (received_char >= '0' && received_char <= '9' && idx < 3)
+					new_pm_buffer[idx++] = received_char;
+					} else {
+					comando_buffer[comando_idx] = '\0';
+					new_pm_buffer[idx] = '\0';
+
+					if (strcmp(comando_buffer, "Datos") == 0 || strcmp(comando_buffer, "datos") == 0) {
+						UART_print_P(PSTR("\n=== DATOS GUARDADOS ===\n"));
+						char linea[32];
+						for (uint8_t i = 0; i < indice_datos; i++) {
+							sprintf(linea, "%.2f,%d,%d,%d\r\n", datos_temp[i], datos_heat[i], datos_fan[i], datos_pm[i]);
+							UART_print(linea);
+						}
+						UART_print_P(PSTR("=======================\n"));
 					}
+
+					else if (idx > 0) {
+						uint8_t nuevo_pm = (uint8_t)atoi(new_pm_buffer);
+						if (nuevo_pm <= 99) {
+							punto_medio = nuevo_pm;
+							sprintf(buffer, "\n*** PM actualizado a %dC ***\n", punto_medio);
+							UART_print(buffer);
+							show_menu(punto_medio);
+						}
+					}
+
+					comando_idx = 0;
+					idx = 0;
+					comando_buffer[0] = '\0';
+					new_pm_buffer[0] = '\0';
 				}
-				idx = 0;
-				new_pm_buffer[0] = '\0';
 			}
+
+			_delay_ms(100);  
 		}
 
-		// Lectura sensor
 		adc_val = ADC_read(0);
 		tempC = (adc_val * 5.0 / 1023.0) * 100.0;
 
-		uint8_t lim1 = punto_medio - 8;  // límite inferior calefactor
-		uint8_t lim2 = punto_medio - 1;  // fin del rango neutro
-		uint8_t lim3 = punto_medio + 10; // inicio rango medio
-		uint8_t lim4 = punto_medio + 20; // inicio rango alto
+		uint8_t lim1 = punto_medio - 8;
+		uint8_t lim2 = punto_medio - 1;
+		uint8_t lim3 = punto_medio + 10;
+		uint8_t lim4 = punto_medio + 20;
 
 		if (tempC <= lim1) {
-			set_heater_power(254);
-			set_fan_speed(0);
-			sprintf(buffer,"T:%.2fC | Calefactor encendido (ALTO)\n", tempC);
+			set_heater_power(254); set_fan_speed(0);
+			heater_state = 2; fan_state = 0;
+			sprintf(buffer, "T:%.2fC | Calefactor encendido (ALTO)\n", tempC);
 		}
 		else if (tempC > lim1 && tempC <= lim2) {
-			set_heater_power(150);
-			set_fan_speed(0);
-			sprintf(buffer,"T:%.2fC | Calefactor encendido (MEDIO)\n", tempC);
+			set_heater_power(150); set_fan_speed(0);
+			heater_state = 1; fan_state = 0;
+			sprintf(buffer, "T:%.2fC | Calefactor encendido (MEDIO)\n", tempC);
 		}
 		else if (tempC > lim2 && tempC <= punto_medio + 3) {
-			set_heater_power(0);
-			set_fan_speed(0);
-			sprintf(buffer,"T:%.2fC | Reposo (Punto medio)\n", tempC);
+			set_heater_power(0); set_fan_speed(0);
+			heater_state = 0; fan_state = 0;
+			sprintf(buffer, "T:%.2fC | Reposo (Punto medio)\n", tempC);
 		}
 		else if (tempC > punto_medio + 3 && tempC <= lim3) {
-			set_heater_power(0);
-			set_fan_speed(85);
-			sprintf(buffer,"T:%.2fC | Ventilador encendido (BAJO)\n", tempC);
+			set_heater_power(0); set_fan_speed(150);
+			heater_state = 0; fan_state = 1;
+			sprintf(buffer, "T:%.2fC | Ventilador encendido (BAJO)\n", tempC);
 		}
 		else if (tempC > lim3 && tempC <= lim4) {
-			set_heater_power(0);
-			set_fan_speed(170);
-			sprintf(buffer,"T:%.2fC | Ventilador encendido (MEDIO)\n", tempC);
+			set_heater_power(0); set_fan_speed(190);
+			heater_state = 0; fan_state = 2;
+			sprintf(buffer, "T:%.2fC | Ventilador encendido (MEDIO)\n", tempC);
 		}
 		else if (tempC > lim4) {
-			set_heater_power(0);
-			set_fan_speed(254);
-			sprintf(buffer,"T:%.2fC | Ventilador encendido (ALTO)\n", tempC);
+			set_heater_power(0); set_fan_speed(254);
+			heater_state = 0; fan_state = 3;
+			sprintf(buffer, "T:%.2fC | Ventilador encendido (ALTO)\n", tempC);
 		}
 
 		UART_print(buffer);
-		UART_print_P(PSTR("(Ingrese nuevo PM si desea)\n"));
-		_delay_ms(2000);
-	}
+		UART_print_P(PSTR("(Ingrese nuevo PM o 'datos' para listar)\n"));
 
+		if (indice_datos < MAX_DATOS) {
+			datos_temp[indice_datos] = tempC;
+			datos_heat[indice_datos] = heater_state;
+			datos_fan[indice_datos] = fan_state;
+			datos_pm[indice_datos] = punto_medio; 
+			indice_datos++;
+		}
+	}
+}
