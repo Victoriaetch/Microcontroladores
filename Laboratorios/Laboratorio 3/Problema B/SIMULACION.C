@@ -1,3 +1,4 @@
+// Código basado en el implementado de forma física 
 #define F_CPU 16000000UL
 #include <avr/io.h>
 #include <util/delay.h>
@@ -9,6 +10,7 @@
 #define BAUD 9600
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
 
+//UART
 void UART_send(char c) {
     while (!(UCSR0A & (1<<UDRE0)));
     UDR0 = c;
@@ -35,6 +37,7 @@ void UART_init() {
     UCSR0C = (1<<UCSZ01)|(1<<UCSZ00);
 }
 
+// ADC
 void ADC_init() {
     ADMUX = (1<<REFS0); // AVCC como referencia
     ADCSRA = (1<<ADEN) | (1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0); 
@@ -47,6 +50,7 @@ uint16_t ADC_read(uint8_t channel) {
     return ADC;
 }
 
+// PWM
 void PWM_init_fan() {
     DDRB |= (1<<PB3);
     TCCR2A = (1<<COM2A1)|(1<<WGM20)|(1<<WGM21);
@@ -68,6 +72,7 @@ void set_heater_power(uint8_t power) {
     OCR0B = power;
 }
 
+// Menú interactivo
 void show_menu(uint8_t current_pm) {
     UART_print_P(PSTR("\n============================================\n"));
     UART_print_P(PSTR("     Sistema de Control de Temperatura \n"));
@@ -82,43 +87,44 @@ void show_menu(uint8_t current_pm) {
 }
 
 int main(void) {
-    float tempC;
-    char buffer[80];
+    float tempC; // Variable para temperatura calculada
+    char buffer[80]; // Buffer para enviar mensajes por UART
     uint16_t adc_val;
-    uint8_t punto_medio = 27;
+    uint8_t punto_medio = 27; // Punto medio inicial
 
-    char new_pm_buffer[4] = {0};
-    uint8_t idx = 0;
+    char new_pm_buffer[4] = {0}; // Buffer para ingresar nuevo PM
+    uint8_t idx = 0; // Índice del buffer
     char received_char;
 
     uint8_t heater_state = 0;
     uint8_t fan_state = 0;
 
+	// Inicializaciones
     UART_init();
     ADC_init();
     PWM_init_fan();
     PWM_init_heater();
 	
-   	DDRD |= (1<<PD7); 
-  	PORTD |= (1<<PD7); 
+   	DDRD |= (1<<PD7); // Dirección motor (para la simulación exclusivamente)
+  	PORTD |= (1<<PD7); // Sentido fijo
 
     set_fan_speed(0);
     set_heater_power(0);
-    show_menu(punto_medio);
+    show_menu(punto_medio); // Muestra menú inicial
 
     while(1) {
 
         while ( (received_char = UART_check_receive()) != 0 ) {
 
             if (received_char >= '0' && received_char <= '9' && idx < 3) {
-                new_pm_buffer[idx++] = received_char;
+                new_pm_buffer[idx++] = received_char; // Guarda dígitos PM
             }
             else if (received_char == '\n' || received_char == '\r') {
                 new_pm_buffer[idx] = '\0';
                 if (idx > 0) {
-                    uint8_t nuevo_pm = (uint8_t)atoi(new_pm_buffer);
+                    uint8_t nuevo_pm = (uint8_t)atoi(new_pm_buffer); // Convierte a entero
                     if (nuevo_pm <= 99) {
-                        punto_medio = nuevo_pm; // ¡AQUÍ SE ACTUALIZA!
+                        punto_medio = nuevo_pm;  // Actualiza PM
 
                         sprintf(buffer,"\n*** PM actualizado a %dC ***\n", punto_medio);
                         UART_print(buffer);
@@ -127,18 +133,20 @@ int main(void) {
                 }
                 idx = 0;
                 new_pm_buffer[0] = '\0';
-                while(UART_check_receive() != 0);
+                while(UART_check_receive() != 0); // Vacía buffer UART
                 break; 
             }
         } 
-        adc_val = ADC_read(0);
-        tempC = (adc_val * 5.0 / 1023.0) * 100.0;
+        adc_val = ADC_read(0); // Lee el ADC
+        tempC = (adc_val * 5.0 / 1023.0) * 100.0; // Convierte a temperatura Celsius
 
+		// Rangos para controlar calefactor y ventilador
         uint8_t lim1 = punto_medio - 8;
         uint8_t lim2 = punto_medio - 1;
         uint8_t lim3 = punto_medio + 10;
         uint8_t lim4 = punto_medio + 20;
 
+		// Control del calefactor y ventilador según temperatura
         if (tempC <= lim1) {
             set_heater_power(254); set_fan_speed(0);
             heater_state = 2; fan_state = 0;
@@ -170,11 +178,11 @@ int main(void) {
             sprintf(buffer,"T:%.2fC | Ventilador encendido (ALTO)\n", tempC);
         }
 
-        UART_print(buffer);
+        UART_print(buffer); // Muestra estado actual
         UART_print_P(PSTR("(Ingrese nuevo PM si desea)\n"));
 
         sprintf(buffer, "%.2f,%d,%d,%d\n", tempC, heater_state, fan_state, punto_medio);
-        UART_print(buffer);
+        UART_print(buffer); // Muestra la lectura actual en formato CSV
 
         _delay_ms(1000);
     }
