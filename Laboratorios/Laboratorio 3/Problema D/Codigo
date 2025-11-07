@@ -1,48 +1,50 @@
-// Falta comentar (ya se probó el código)
-#define F_CPU 16000000UL
-#define NUM_LEDS 64
-#define ANCHO 8
-#define ALTO 8
-#define DATA_PIN PD6      
-#define DEADZONE 200   
+#define F_CPU 16000000UL // Frecuencia del micro
+#define NUM_LEDS 64 // Número total de LEDs en la matriz 8x8
+#define ANCHO 8 // Ancho de la matriz
+#define ALTO 8 // Alto de la matriz
+#define DATA_PIN PD6  // Pin de salida de datos para los LEDs WS2812    
+#define DEADZONE 200   // Zona muerta para el joystick
 
+// Librerías utilizadas
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <stdlib.h>
 #include <stdbool.h>
-  
+
+// Estructura para almacenar colores RGB
 typedef struct {
 	uint8_t r;
 	uint8_t g;
 	uint8_t b;
 } Color;
 
-Color leds[NUM_LEDS];
-uint8_t posX = 3;
-uint8_t posY = 3;
-Color colorActual;
+Color leds[NUM_LEDS]; // Arreglo de leds 
+uint8_t posX = 3; // Posición inicla X
+uint8_t posY = 3; // Posición inicial Y
+Color colorActual; // Color actual del LED seleccionado
 
-uint16_t ADC_CENTER_X = 512; // Centro para Eje X (Canal 1)
-uint16_t ADC_CENTER_Y = 512; // Centro para Eje Y (Canal 0)
+uint16_t ADC_CENTER_X = 512; // Centro calibrado eje X (Canal 1)
+uint16_t ADC_CENTER_Y = 512; // Centro calibrado eje Y (Canal 0)
 
+// Funciones ADC
 void ADC_init(void) {
 	ADMUX = (1 << REFS0); // referencia AVcc
 	ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1); // habilitar ADC, prescaler 64
 }
 
 uint16_t ADC_read(uint8_t canal) {
-	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F);
-	ADCSRA |= (1 << ADSC);
+	ADMUX = (ADMUX & 0xF0) | (canal & 0x0F); // Selecciona canal
+	ADCSRA |= (1 << ADSC); // Inicia conversión
 	while (ADCSRA & (1 << ADSC));
-	return ADC;
+	return ADC; // Devuelve valor leído
 }
 
 // Calibración del Joystick 
 void calibrarJoystick(void) {
 	uint32_t sumY = 0; // Usando Canal 0 para el eje Y
 	uint32_t sumX = 0; // Usando Canal 1 para el eje X
-	int num_muestras = 50;
+	int num_muestras = 50; // Número de muestras para promedio
 
 	for (int i = 0; i < num_muestras; i++) {
 		sumY += ADC_read(0); // Canal 0 (Movimiento Vertical/Eje Y)
@@ -56,7 +58,7 @@ void calibrarJoystick(void) {
 
 // Lectura joystick 
 int leerMovimiento(uint8_t canal) {
-	int valor = ADC_read(canal);
+	int valor = ADC_read(canal); // Leer valor ADC
 	uint16_t centro;
 
 	if (canal == 0) {
@@ -65,9 +67,9 @@ int leerMovimiento(uint8_t canal) {
 		centro = ADC_CENTER_X; // Centro calibrado para Eje X (Canal 1)
 	}
 
-	if (valor > (centro - DEADZONE) && valor < (centro + DEADZONE)) return 0;
+	if (valor > (centro - DEADZONE) && valor < (centro + DEADZONE)) return 0; // Zona muerta
 
-	return (valor > centro) ? 1 : -1;
+	return (valor > centro) ? 1 : -1; // Arriba/Derecha = 1, Abajo/Izquierda = -1
 }
 
 // Lectura botón SW 
@@ -89,8 +91,7 @@ uint8_t indexLed(uint8_t x, uint8_t y) {
 }
 
 void ws2812_send(Color *leds, uint16_t num_leds) {
-	cli();
-
+	cli(); // Desactiva interrupciones
 	for (uint16_t i = 0; i < num_leds; i++) {
 		uint8_t colors[3] = { leds[i].g, leds[i].r, leds[i].b }; // G-R-B
 		for (uint8_t k = 0; k < 3; k++) {
@@ -112,20 +113,20 @@ void ws2812_send(Color *leds, uint16_t num_leds) {
 		}
 	}
 
-	sei();
+	sei(); // Habilita interrupciones
 	_delay_us(50);
 }
 
 int main(void) {
 	// Configuración de pines de E/S
-	DDRD |= (1 << DATA_PIN);
-	DDRD &= ~(1 << PD2);
+	DDRD |= (1 << DATA_PIN); 
+	DDRD &= ~(1 << PD2); 
 	PORTD |= (1 << PD2);
 
 	ADC_init();
-	
 	calibrarJoystick();
-	
+
+	// Inicialización aleatoria de color
 	uint32_t semilla = 0;
 	for (int i = 0; i < 50; i++) {
 		semilla += ADC_read(0);
@@ -196,9 +197,9 @@ int main(void) {
 			leds[i].b = 0;
 		}
 		
-		leds[indexLed(posX,posY)] = colorActual;
+		leds[indexLed(posX,posY)] = colorActual; // Actualiza color del LED seleccionado
 		
-		ws2812_send(leds, NUM_LEDS);
+		ws2812_send(leds, NUM_LEDS); // Envía datos a la matriz
 	}
 }
 
