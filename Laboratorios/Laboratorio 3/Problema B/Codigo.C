@@ -169,6 +169,7 @@ int main(void) {
 		adc_val = ADC_read(0); // Lee el ADC
 		tempC = (adc_val * 5.0 / 1023.0) * 100.0; // Convierte a temperatura Celsius
 
+		// Rangos para controlar calefactor y ventilador
 		uint8_t lim1 = punto_medio - 8;
 		uint8_t lim2 = punto_medio - 1;
 		uint8_t lim3 = punto_medio + 10;
