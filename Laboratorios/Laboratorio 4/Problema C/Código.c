@@ -8,6 +8,7 @@
 #define NUM_LEDS 256
 #define DATA_PIN PD6
 #define BAUD 9600
+#define MATRIZ_TAMANIO 16
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
 #define NUM_COLORES_INICIALIZACION 5
 
@@ -119,10 +120,29 @@ void ws2812_send(Color *leds,uint16_t n){
 	for(volatile uint16_t i=0;i<50;i++);
 }
 
+uint16_t unmapSerpentine(uint16_t i) {
+	if (i >= NUM_LEDS) return 0;
+
+	uint8_t fila = i / MATRIZ_TAMANIO;
+	uint8_t columna = i % MATRIZ_TAMANIO;
+	uint16_t indice_logico;
+
+	if (fila % 2 != 0) {
+		columna = (MATRIZ_TAMANIO - 1) - columna;
+	}
+	
+	indice_logico = (fila * MATRIZ_TAMANIO) + columna;
+
+	return indice_logico;
+}
+
 // Mostrar Frame (a cada variable/numero se le asigna un color)
 void mostrarFrameColor(const uint8_t *frame){
+	uint16_t indice_logico;
 	for(uint16_t i=0;i<NUM_LEDS;i++){
-		uint8_t val=pgm_read_byte(&(frame[i]));
+		indice_logico = unmapSerpentine(i);
+		uint8_t val=pgm_read_byte(&(frame[indice_logico]));
+		
 		switch(val){
 			case 0: leds[i].r=0;   leds[i].g=0;   leds[i].b=0; break;
 			case 1: leds[i].r=15;  leds[i].g=15;  leds[i].b=15; break;
