@@ -4,7 +4,7 @@
 #include <stdint.h> // Usar uint8_t para claridad
 
 /**
- * @brief Initializes SPI hardware in Slave mode.
+ * Initializes SPI hardware in Slave mode.
  * MISO (PB4) is set to output.
  * SS (PB2), MOSI (PB3), SCK (PB5) are inputs.
  * Enables SPI (SPE) and SPI Interrupt (SPIE).
@@ -26,7 +26,7 @@ void SPI_SlaveInit(void) {
 }
 
 /**
- * @brief SPI Transfer Complete Interrupt Service Routine.
+ * SPI Transfer Complete Interrupt Service Routine.
  * This function is called automatically when a full byte
  * has been received from the Master.
  */
@@ -77,7 +77,7 @@ ISR(SPI_STC_vect) {
 	   break;
 
 case 'x': // Apagar todo
-PORTB &= ~((1 << PB0) | (1 << PB1)); // LED y RELÉ off
+PORTB &= ~((1 << PB0) | (1 << PB1)); // LED y RELÃ‰ off
 PORTD &= ~(1 << PD3);                // Buzzer off
 uart_print("Todo OFF\r\n");
 break;
@@ -90,7 +90,8 @@ break;
 
     
     // 4. Cargar el byte de respuesta en el registro SPDR.
-    // Este byte será enviado de vuelta al Master durante
-    // la *siguiente* transacción SPI.
+    // Este byte serÃ¡ enviado de vuelta al Master durante
+    // la *siguiente* transacciÃ³n SPI.
     SPDR = response;
+
 }
