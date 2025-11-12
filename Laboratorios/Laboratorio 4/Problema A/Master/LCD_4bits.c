@@ -1,10 +1,10 @@
-#include "config.h" // AÑADIDO: Para F_CPU
+#include "config.h" // AÃ‘ADIDO: Para F_CPU
 #include <avr/io.h>
 #include <util/delay.h>
-#include <stdlib.h> // AÑADIDO: Para itoa()
+#include <stdlib.h> // AÃ‘ADIDO: Para itoa()
 #include "LCD_4bits.h"
 
-// Pin mapping (confirmado por vos)
+// Pin mapping ==
 #define LCD_RS_PORT PORTD
 #define LCD_RS_DDR  DDRD
 #define LCD_RS_PIN  PD5
@@ -29,9 +29,9 @@
 #define LCD_D7_PORT PORTD
 #define LCD_D7_DDR  DDRD
 #define LCD_D7_PIN  PD3
-// NOTA: PB2 también es el pin SS del hardware SPI.
-// Esto está BIEN, ya que SPI_MasterInit() lo configura como SALIDA
-// y la LCD también lo configura como SALIDA. No hay conflicto.
+// NOTA: PB2 tambiÃ©n es el pin SS del hardware SPI.
+// Esto estÃ¡ BIEN, ya que SPI_MasterInit() lo configura como SALIDA
+// y la LCD tambiÃ©n lo configura como SALIDA. No hay conflicto.
 
 static inline void lcd_pulse_en(void){
 	LCD_EN_PORT |= (1<<LCD_EN_PIN);
@@ -130,6 +130,7 @@ void lcd_print(const char *s){
 
 void lcd_print_num(int num){
 	char buf[12];
-	itoa(num, buf, 10); // Esta función necesita stdlib.h
+	itoa(num, buf, 10); // Esta funciÃ³n necesita stdlib.h
 	lcd_print(buf);
+
 }
