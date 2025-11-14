@@ -58,7 +58,7 @@ int main(void) {
 	#endif
 	_delay_ms(1000);
 
-	// Sincronizaci髇 inicial
+	// Sincronizaci贸n inicial
 	lcd_clear();
 	lcd_print("Sincronizando...");
 	SPI_Transfer('x'); // apaga todo
@@ -83,8 +83,6 @@ int main(void) {
 		flame_level = ADC_Read(FLAME_ADC_CHANNEL);
 		if (dht22_read(&temp_x10, &hum_x10))
 		temperature = temp_x10 / 10;
-		else
-		temperature = -99;
 		#endif
 
 		bool stop_button_pressed = !(STOP_BUTTON_PORT & (1 << STOP_BUTTON_PIN));
@@ -95,13 +93,13 @@ int main(void) {
 		char command = 'x'; // valor por defecto: todo apagado
 
 		// -----------------------------------------------------------
-		// L骻ica de prioridad + bot髇 de silencio
+		// L贸gica de prioridad + bot贸n de silencio
 		// -----------------------------------------------------------
 		if (stop_button_pressed) {
-			// Si se presiona el bot髇, apaga todo inmediatamente
+			// Si se presiona el bot贸n, apaga todo inmediatamente
 			command = 'x';
 			} else if (flame_alarm) {
-			command = 'B';  // Fuego tiene m醲ima prioridad
+			command = 'B';  // Fuego tiene m谩xima prioridad
 			} else if (gas_alarm) {
 			command = 'L';  // Gas
 			} else if (temp_alarm) {
@@ -140,4 +138,5 @@ int main(void) {
 		_delay_ms(500);
 	}
 }
+
 
