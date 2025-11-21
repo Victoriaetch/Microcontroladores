@@ -1,22 +1,23 @@
-#include <avr/io.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-#include <stdlib.h>
-
+#include <avr/io.h>    // Definiciones de registros de E/S
+#include <avr/interrupt.h>    // Librería para manejo de interrupciones
+#include <util/delay.h>    // Funciones de retardo
+#include <stdlib.h>    // Librería estándar
+// Frecuencia del CPU definida a 16MHz
 #define F_CPU 16000000UL
+// Definición de Pines
 #define LED_PIN 6
 #define BUTTON_PIN 2
-
+// Dimensiones de la matriz
 #define WIDTH 8
 #define HEIGHT 8
 #define NUM_LEDS 64
-
+// Estructura para manejar colores. 
 typedef struct {
     uint8_t g, r, b;
 } Color;
-
+// Buffer en RAM que almacena el estado de todos los LEDs antes de enviarlos
 Color ledBuffer[NUM_LEDS];
-
+// Paleta de colores predefinida para cambiar con el botón
 const Color palette[7] = {
     {0, 255, 0},
     {255, 0, 0},
@@ -26,25 +27,27 @@ const Color palette[7] = {
     {0, 255, 255},
     {255, 255, 255}
 };
-
+// Variables globales volátiles
 volatile uint32_t millis_timer = 0;
+// Variables de estado del sistema
 int8_t dotX = 3;
 int8_t dotY = 3;
 uint8_t colorIndex = 0;
 Color currentColor;
 
+// GESTIÓN DE TIEMPO (TIMER0)
 void timer_init() {
     TCCR0A = (1 << WGM01);
     TCCR0B = (1 << CS01) | (1 << CS00);
     OCR0A = 249;
     TIMSK0 = (1 << OCIE0A);
-    sei();
+    sei();    // Habilita interrupciones globales
 }
-
+// Rutina de Servicio de Interrupción (ISR) que se ejecuta cada 1ms
 ISR(TIMER0_COMPA_vect) {
     millis_timer++;
 }
-
+// Función auxiliar para obtener el tiempo actual de forma segura (atómica)
 uint32_t millis() {
     uint32_t m;
     cli();
@@ -52,43 +55,43 @@ uint32_t millis() {
     sei();
     return m;
 }
-
+// COMUNICACIÓN I2C; Inicializa el módulo I2C del ATmega328P
 void i2c_init() {
     TWSR = 0;
     TWBR = 72;
     TWCR = (1 << TWEN);
 }
-
+// Envía condición de START
 void i2c_start() {
     TWCR = (1<<TWINT)|(1<<TWSTA)|(1<<TWEN);
     while (!(TWCR & (1<<TWINT)));
 }
-
+// Envía condición de STOP
 void i2c_stop() {
     TWCR = (1<<TWINT)|(1<<TWSTO)|(1<<TWEN);
 }
-
+// Escribe un byte al bus I2C
 void i2c_write(uint8_t data) {
     TWDR = data;
     TWCR = (1<<TWINT)|(1<<TWEN);
     while (!(TWCR & (1<<TWINT)));
 }
-
+// Lee un byte del bus y envía ACK
 uint8_t i2c_read_ack() {
     TWCR = (1<<TWINT)|(1<<TWEN)|(1<<TWEA);
     while (!(TWCR & (1<<TWINT)));
     return TWDR;
 }
-
+// Lee un byte del bus y envía NACK 
 uint8_t i2c_read_nack() {
     TWCR = (1<<TWINT)|(1<<TWEN);
     while (!(TWCR & (1<<TWINT)));
     return TWDR;
 }
-
+// SENSOR MPU6050
 #define MPU_ADDR 0x68
 #define TILT_THRESHOLD 4200
-
+// Configuración inicial del giroscopio/acelerómetro
 void mpu_init() {
     i2c_start();
     i2c_write(MPU_ADDR << 1);
@@ -96,31 +99,34 @@ void mpu_init() {
     i2c_write(0);
     i2c_stop();
 }
-
+// Lee los valores crudos del acelerómetro (Ejes X e Y)
 void mpu_read_accel(int16_t *ax, int16_t *ay) {
     i2c_start();
     i2c_write(MPU_ADDR << 1);
     i2c_write(0x3B);
+// Reiniciar comunicación (Repeated Start) para cambiar a modo lectura
     i2c_start();
     i2c_write((MPU_ADDR << 1) | 1);
     
     uint8_t h, l;
+    // Leer X Alto y Bajo
     h = i2c_read_ack(); l = i2c_read_ack();
     *ax = (h << 8) | l;
-    
+    // Leer Y Alto y Bajo 
     h = i2c_read_ack(); l = i2c_read_ack();
     *ay = (h << 8) | l;
     
     i2c_stop();
 }
-
+// DRIVER MATRIZ LED (WS2812B)
+// Esta función envía el buffer de colores a los LEDs.
 void show_pixels() {
     volatile uint8_t *port = (uint8_t *)&PORTD;
     uint8_t pinMask = (1 << LED_PIN);
     uint16_t count = NUM_LEDS * 3;
     uint8_t *ptr = (uint8_t *)ledBuffer;
     
-    cli();
+    cli();    // Desactivar interrupciones
     
     asm volatile(
         "loop_start: \n\t"
@@ -143,10 +149,10 @@ void show_pixels() {
         : [port] "e" (port), [on] "r" (pinMask | PORTD), [off] "r" (~pinMask & PORTD), [bits] "d" (8)
     );
     
-    sei();
+    sei();    // Reactivar interrupciones
     _delay_us(50);
 }
-
+// Limpia el buffer 
 void clear_matrix() {
     for (int i = 0; i < NUM_LEDS; i++) {
         ledBuffer[i].r = 0;
@@ -154,58 +160,63 @@ void clear_matrix() {
         ledBuffer[i].b = 0;
     }
 }
-
+// Establece el color de un pixel en coordenadas (x, y)
 void set_pixel(int x, int y, Color c) {
     if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
     int index = (y * WIDTH) + x;
     ledBuffer[index] = c;
 }
-
+// PROGRAMA PRINCIPAL
 int main(void) {
+// Configuración de Hardware
     DDRD |= (1 << LED_PIN);
     DDRD &= ~(1 << BUTTON_PIN);
     PORTD |= (1 << BUTTON_PIN);
-    
+// Inicialización de periféricos
     timer_init();
     i2c_init();
     mpu_init();
-    
+// Estado inicial
     currentColor = palette[0];
     uint32_t lastMoveTime = 0;
     uint32_t lastButtonPress = 0;
     
     while (1) {
         uint32_t now = millis();
-        
+        // Lógica del Botón 
         if (!(PIND & (1 << BUTTON_PIN))) {
             if (now - lastButtonPress > 250) {
                 lastButtonPress = now;
+                // Cambiar color cíclicamente
                 colorIndex++;
                 if (colorIndex >= 7) colorIndex = 0;
                 currentColor = palette[colorIndex];
             }
         }
-        
+        // Lógica de Movimiento
         if (now - lastMoveTime > 100) {
             lastMoveTime = now;
             
             int16_t ax, ay;
             mpu_read_accel(&ax, &ay);
-            
+
+            // Invertir o ajustar ejes según la orientación física del sensor
+            // Si la aceleración supera el umbral positivo o negativo, mover punto
+            // Eje Y del sensor controla X de la matriz
             if (ay > TILT_THRESHOLD) dotX++;
             else if (ay < -TILT_THRESHOLD) dotX--;
-            
+            // Eje X del sensor controla Y de la matriz
             if (ax > TILT_THRESHOLD) dotY++;
             else if (ax < -TILT_THRESHOLD) dotY--;
-            
+            // Limitar coordenadas para no salir de la matriz (0 a 7)
             if (dotX < 0) dotX = 0;
             if (dotX >= WIDTH) dotX = WIDTH - 1;
             if (dotY < 0) dotY = 0;
             if (dotY >= HEIGHT) dotY = HEIGHT - 1;
             
-            clear_matrix();
-            set_pixel(dotX, dotY, currentColor);
-            show_pixels();
+            clear_matrix();    // Borrar frame anterior
+            set_pixel(dotX, dotY, currentColor);    // Dibujar punto en nueva posición
+            show_pixels();    // Enviar datos a la matriz física
         }
     }
     return 0;
