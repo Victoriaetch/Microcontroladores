@@ -5,17 +5,19 @@
 #include <stdint.h>
 #include <util/delay.h>
 
-#define NUM_LEDS 256
-#define DATA_PIN PD6
+#define NUM_LEDS 256   // Cantidad de LEDs WS2812
+#define DATA_PIN PD6 // Pin de datos para los LEDs
 #define BAUD 9600
-#define MATRIZ_TAMANIO 16
+#define MATRIZ_TAMANIO 16 // Tamaño de la matriz 16x16
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
-#define NUM_COLORES_INICIALIZACION 5
+#define NUM_COLORES_INICIALIZACION 5 // Colores iniciales al encender
 
+// Estructura para representar un color RGB
 typedef struct { 
 	uint8_t r,g,b; 
 	} Color;
-	
+
+// Arreglo principal de LEDs
 Color leds[NUM_LEDS];
 
 // Frames 
@@ -93,6 +95,7 @@ void UART_init(){
 	UCSR0C=(1<<UCSZ01)|(1<<UCSZ00);
 	}
 
+// Retardo
 void delay_variable_ms(uint16_t ms) {
 	for (uint16_t i = 0; i < ms; i++) {
 		_delay_ms(1);
@@ -101,7 +104,7 @@ void delay_variable_ms(uint16_t ms) {
 
 // WS2812
 void ws2812_send(Color *leds,uint16_t n){
-	cli();
+	cli(); // deshabilita interrupciones
 	for(uint16_t i=0;i<n;i++){
 		uint8_t colors[3]={leds[i].g,leds[i].r,leds[i].b};
 		for(uint8_t k=0;k<3;k++){
@@ -122,10 +125,11 @@ void ws2812_send(Color *leds,uint16_t n){
 			}
 		}
 	}
-	sei();
-	for(volatile uint16_t i=0;i<50;i++);
+	sei(); // habilita interrupciones
+	for(volatile uint16_t i=0;i<50;i++);  // retardo final
 }
 
+// Convierte índice lineal a "serpentine"
 uint16_t unmapSerpentine(uint16_t i) {
 	if (i >= NUM_LEDS) return 0;
 
@@ -166,6 +170,7 @@ void mostrarFrameColor(const uint8_t *frame){
 	ws2812_send(leds, NUM_LEDS);
 }
 
+// Mostrar color uniforme
 void mostrarColor(uint8_t r, uint8_t g, uint8_t b){
 	for(uint16_t i=0;i<NUM_LEDS;i++){
 		leds[i].r=r; leds[i].g=g; leds[i].b=b;
