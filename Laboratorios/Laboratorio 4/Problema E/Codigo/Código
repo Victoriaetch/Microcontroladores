@@ -343,7 +343,7 @@ int main() {
             if(gyro < -8000 || gyro > 8000) uart_send("! VUELCO !\r\n");
         }
 
-        if(++anim_tick > 3) {
+        if(++anim_tick > 15) {
             anim_tick = 0; 
             anim_frame = !anim_frame;
             
