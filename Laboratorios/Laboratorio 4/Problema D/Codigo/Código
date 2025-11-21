@@ -1,0 +1,212 @@
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <stdlib.h>
+
+#define F_CPU 16000000UL
+#define LED_PIN 6
+#define BUTTON_PIN 2
+
+#define WIDTH 8
+#define HEIGHT 8
+#define NUM_LEDS 64
+
+typedef struct {
+    uint8_t g, r, b;
+} Color;
+
+Color ledBuffer[NUM_LEDS];
+
+const Color palette[7] = {
+    {0, 255, 0},
+    {255, 0, 0},
+    {0, 0, 255},
+    {255, 255, 0},
+    {255, 0, 255},
+    {0, 255, 255},
+    {255, 255, 255}
+};
+
+volatile uint32_t millis_timer = 0;
+int8_t dotX = 3;
+int8_t dotY = 3;
+uint8_t colorIndex = 0;
+Color currentColor;
+
+void timer_init() {
+    TCCR0A = (1 << WGM01);
+    TCCR0B = (1 << CS01) | (1 << CS00);
+    OCR0A = 249;
+    TIMSK0 = (1 << OCIE0A);
+    sei();
+}
+
+ISR(TIMER0_COMPA_vect) {
+    millis_timer++;
+}
+
+uint32_t millis() {
+    uint32_t m;
+    cli();
+    m = millis_timer;
+    sei();
+    return m;
+}
+
+void i2c_init() {
+    TWSR = 0;
+    TWBR = 72;
+    TWCR = (1 << TWEN);
+}
+
+void i2c_start() {
+    TWCR = (1<<TWINT)|(1<<TWSTA)|(1<<TWEN);
+    while (!(TWCR & (1<<TWINT)));
+}
+
+void i2c_stop() {
+    TWCR = (1<<TWINT)|(1<<TWSTO)|(1<<TWEN);
+}
+
+void i2c_write(uint8_t data) {
+    TWDR = data;
+    TWCR = (1<<TWINT)|(1<<TWEN);
+    while (!(TWCR & (1<<TWINT)));
+}
+
+uint8_t i2c_read_ack() {
+    TWCR = (1<<TWINT)|(1<<TWEN)|(1<<TWEA);
+    while (!(TWCR & (1<<TWINT)));
+    return TWDR;
+}
+
+uint8_t i2c_read_nack() {
+    TWCR = (1<<TWINT)|(1<<TWEN);
+    while (!(TWCR & (1<<TWINT)));
+    return TWDR;
+}
+
+#define MPU_ADDR 0x68
+#define TILT_THRESHOLD 4200
+
+void mpu_init() {
+    i2c_start();
+    i2c_write(MPU_ADDR << 1);
+    i2c_write(0x6B);
+    i2c_write(0);
+    i2c_stop();
+}
+
+void mpu_read_accel(int16_t *ax, int16_t *ay) {
+    i2c_start();
+    i2c_write(MPU_ADDR << 1);
+    i2c_write(0x3B);
+    i2c_start();
+    i2c_write((MPU_ADDR << 1) | 1);
+    
+    uint8_t h, l;
+    h = i2c_read_ack(); l = i2c_read_ack();
+    *ax = (h << 8) | l;
+    
+    h = i2c_read_ack(); l = i2c_read_ack();
+    *ay = (h << 8) | l;
+    
+    i2c_stop();
+}
+
+void show_pixels() {
+    volatile uint8_t *port = (uint8_t *)&PORTD;
+    uint8_t pinMask = (1 << LED_PIN);
+    uint16_t count = NUM_LEDS * 3;
+    uint8_t *ptr = (uint8_t *)ledBuffer;
+    
+    cli();
+    
+    asm volatile(
+        "loop_start: \n\t"
+        "ld __tmp_reg__, %a[ptr]+ \n\t"
+        "ldi %[bits], 8 \n\t"
+        "next_bit: \n\t"
+        "st %a[port], %[on] \n\t"
+        "sbrs __tmp_reg__, 7 \n\t"
+        "st %a[port], %[off] \n\t"
+        "rjmp .+0 \n\t"
+        "lsl __tmp_reg__ \n\t"
+        "sbrc __tmp_reg__, 7 \n\t"
+        "rjmp .+0 \n\t"
+        "st %a[port], %[off] \n\t"
+        "dec %[bits] \n\t"
+        "brne next_bit \n\t"
+        "sbiw %[count], 1 \n\t"
+        "brne loop_start \n\t"
+        : [ptr] "+e" (ptr), [count] "+w" (count)
+        : [port] "e" (port), [on] "r" (pinMask | PORTD), [off] "r" (~pinMask & PORTD), [bits] "d" (8)
+    );
+    
+    sei();
+    _delay_us(50);
+}
+
+void clear_matrix() {
+    for (int i = 0; i < NUM_LEDS; i++) {
+        ledBuffer[i].r = 0;
+        ledBuffer[i].g = 0;
+        ledBuffer[i].b = 0;
+    }
+}
+
+void set_pixel(int x, int y, Color c) {
+    if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT) return;
+    int index = (y * WIDTH) + x;
+    ledBuffer[index] = c;
+}
+
+int main(void) {
+    DDRD |= (1 << LED_PIN);
+    DDRD &= ~(1 << BUTTON_PIN);
+    PORTD |= (1 << BUTTON_PIN);
+    
+    timer_init();
+    i2c_init();
+    mpu_init();
+    
+    currentColor = palette[0];
+    uint32_t lastMoveTime = 0;
+    uint32_t lastButtonPress = 0;
+    
+    while (1) {
+        uint32_t now = millis();
+        
+        if (!(PIND & (1 << BUTTON_PIN))) {
+            if (now - lastButtonPress > 250) {
+                lastButtonPress = now;
+                colorIndex++;
+                if (colorIndex >= 7) colorIndex = 0;
+                currentColor = palette[colorIndex];
+            }
+        }
+        
+        if (now - lastMoveTime > 100) {
+            lastMoveTime = now;
+            
+            int16_t ax, ay;
+            mpu_read_accel(&ax, &ay);
+            
+            if (ay > TILT_THRESHOLD) dotX++;
+            else if (ay < -TILT_THRESHOLD) dotX--;
+            
+            if (ax > TILT_THRESHOLD) dotY++;
+            else if (ax < -TILT_THRESHOLD) dotY--;
+            
+            if (dotX < 0) dotX = 0;
+            if (dotX >= WIDTH) dotX = WIDTH - 1;
+            if (dotY < 0) dotY = 0;
+            if (dotY >= HEIGHT) dotY = HEIGHT - 1;
+            
+            clear_matrix();
+            set_pixel(dotX, dotY, currentColor);
+            show_pixels();
+        }
+    }
+    return 0;
+}
