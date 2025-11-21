@@ -1,0 +1,343 @@
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <util/delay_basic.h>
+#include <avr/interrupt.h>
+#include <avr/pgmspace.h>
+#include <stdint.h>
+
+const uint8_t frame_feliz_1[] PROGMEM = {
+    2,2,2,2,2,2,2,2, 2,2,6,2,2,6,2,2, 2,6,5,2,2,5,6,2, 2,7,5,2,2,5,7,2,
+    2,2,2,2,2,2,2,2, 2,6,2,2,2,2,6,2, 2,2,6,6,6,6,2,2, 2,2,2,2,2,2,2,2
+};
+const uint8_t frame_feliz_2[] PROGMEM = {
+    2,2,2,2,2,2,2,2, 2,2,2,2,2,2,2,2, 2,2,6,2,2,6,2,2, 2,6,2,2,2,2,6,2,
+    2,2,2,2,2,2,2,2, 2,6,2,2,2,2,6,2, 2,2,6,6,6,6,2,2, 2,2,2,2,2,2,2,2
+};
+
+const uint8_t frame_triste_1[] PROGMEM = {
+    4,4,4,4,4,4,4,4, 4,4,6,4,4,6,4,4, 4,6,5,4,4,5,6,4, 4,7,5,4,4,5,7,4,
+    4,4,4,4,4,4,4,4, 4,4,6,6,6,6,4,4, 4,6,4,4,4,4,6,4, 6,6,6,6,6,6,6,6
+};
+const uint8_t frame_triste_2[] PROGMEM = {
+    4,4,4,4,4,4,4,4, 4,4,4,4,4,4,4,4, 4,4,6,4,4,6,4,4, 4,6,4,4,4,4,6,4,
+    4,4,4,4,4,4,4,4, 4,4,6,6,6,6,4,4, 4,6,4,4,4,4,6,4, 6,6,6,6,6,6,6,6
+};
+
+const uint8_t frame_enojada_1[] PROGMEM = {
+    1,1,1,1,1,1,1,1, 1,6,1,1,1,1,6,1, 1,7,6,1,1,6,7,1, 1,7,5,1,1,5,7,1,
+    1,1,1,1,1,1,1,1, 1,1,6,6,6,6,1,1, 1,6,1,1,1,1,6,1, 6,6,6,6,6,6,6,6
+};
+const uint8_t frame_enojada_2[] PROGMEM = {
+    1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,6,1,1,1,1,6,1, 1,1,6,1,1,6,1,1,
+    1,1,1,1,1,1,1,1, 1,1,6,6,6,6,1,1, 1,6,1,1,1,1,6,1, 6,6,6,6,6,6,6,6
+};
+
+const uint8_t frame_emocionada_1[] PROGMEM = {
+    3,3,3,3,3,3,3,3, 3,6,3,3,3,3,6,3, 3,7,6,3,3,6,7,3, 3,7,5,3,3,5,7,3,
+    3,3,3,3,3,3,3,3, 3,6,3,3,3,3,6,3, 3,3,6,6,6,6,3,3, 3,3,3,3,3,3,3,3
+};
+const uint8_t frame_emocionada_2[] PROGMEM = {
+    3,3,3,3,3,3,3,3, 3,3,3,3,3,3,3,3, 3,3,6,3,3,6,3,3, 3,6,3,3,3,3,6,3,
+    3,3,3,3,3,3,3,3, 3,6,3,3,3,3,6,3, 3,3,6,6,6,6,3,3, 3,3,3,3,3,3,3,3
+};
+
+#define BAUD 9600
+#define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
+#define VEL_RECTO 180
+#define VEL_GIRO  140
+#define SERVO_POS_REPOSO 3000 
+#define SERVO_POS_PATEAR 4800 
+
+#define G3 196
+#define G3s 208
+#define A3 220
+#define A3s 233
+#define B3 247
+#define C4 262
+#define D4 294
+#define D4s 311
+#define E4 330
+#define F4 349
+#define G4 392
+#define G4s 415
+#define A4 440
+#define A4s 466
+#define B4 494
+#define C5 523
+#define D5 587
+#define D5s 622
+#define E5 659
+#define F5 698
+#define G5 784
+#define G5s 831
+#define A5 880
+#define A5s 932
+#define B5 988
+#define C6 1047
+
+#define NEGRA   400
+#define CORCHEA (NEGRA/2)
+#define BLANCA  (NEGRA*2)
+#define REDONDA (NEGRA*4)
+
+#define M_IZQ_PWM (1 << PD5)
+#define M_IZQ_DIR (1 << PD4)
+#define M_DER_PWM (1 << PB3)
+#define M_DER_DIR (1 << PD7)
+#define SERVO_PIN (1 << PB1)
+#define US_TRIG   (1 << PB0)
+#define US_ECHO   (1 << PD6)
+#define BUZZER    (1 << PB4)
+#define DATA_PIN  (1 << PC3)
+
+#define CMD_FELIZ      'O'
+#define CMD_TRISTE     'N'
+#define CMD_ENOJADA    'X'
+#define CMD_EMOCIONADA 'M'
+
+volatile char comando_uart = 0;
+volatile uint8_t nuevo_comando = 0;
+volatile uint8_t cara_actual = 0;
+volatile uint8_t anim_frame = 0;
+volatile uint16_t anim_tick = 0;
+
+typedef struct { uint8_t r,g,b; } Color;
+Color leds[64];
+
+void hardware_init() {
+    DDRD |= M_IZQ_PWM | M_IZQ_DIR | M_DER_DIR;
+    DDRB |= M_DER_PWM | SERVO_PIN | US_TRIG | BUZZER;
+    DDRC |= DATA_PIN;
+
+    TCCR0A = (1<<WGM01)|(1<<WGM00)|(1<<COM0B1); 
+    TCCR0B = (1<<CS01)|(1<<CS00);
+
+    TCCR2A = (1<<WGM21)|(1<<WGM20)|(1<<COM2A1); 
+    TCCR2B = (1<<CS22);
+
+    TCCR1A = (1<<COM1A1)|(1<<WGM11); 
+    TCCR1B = (1<<WGM13)|(1<<WGM12)|(1<<CS11);
+    ICR1 = 39999; 
+    OCR1A = SERVO_POS_REPOSO;
+
+    TWSR=0; TWBR=72; TWCR=(1<<TWEN);
+
+    UBRR0H=UBRR_VALUE>>8; UBRR0L=UBRR_VALUE; 
+    UCSR0B=(1<<TXEN0)|(1<<RXEN0)|(1<<RXCIE0); 
+    UCSR0C=(1<<UCSZ01)|(1<<UCSZ00);
+}
+
+void mpu_init() {
+    TWCR=(1<<TWINT)|(1<<TWSTA)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0xD0; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0x6B; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0;    TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWCR=(1<<TWINT)|(1<<TWSTO)|(1<<TWEN);
+}
+
+int16_t leer_gyro_z() {
+    uint8_t h,l;
+    TWCR=(1<<TWINT)|(1<<TWSTA)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0xD0; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0x47;
+    TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    
+    TWCR=(1<<TWINT)|(1<<TWSTA)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    TWDR=0xD1; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
+    
+    TWCR=(1<<TWINT)|(1<<TWEN)|(1<<TWEA); while(!(TWCR&(1<<TWINT))); h=TWDR;
+    TWCR=(1<<TWINT)|(1<<TWEN);           while(!(TWCR&(1<<TWINT))); l=TWDR;
+    
+    TWCR=(1<<TWINT)|(1<<TWSTO)|(1<<TWEN);
+    return (h<<8)|l;
+}
+
+void uart_send(const char* s) { 
+    while(*s){ 
+        while(!(UCSR0A&(1<<UDRE0))); 
+        UDR0=*s++; 
+    } 
+}
+
+ISR(USART_RX_vect) { 
+    comando_uart=UDR0; 
+    nuevo_comando=1; 
+}
+
+void tono(uint16_t freq, uint16_t dur_ms) {
+    if (freq == 0) {
+        while(dur_ms > 0) { _delay_ms(1); dur_ms--; }
+        return;
+    }
+    uint16_t ticks = 2000000UL / freq;
+    uint32_t cycles = ((uint32_t)dur_ms * (uint32_t)freq) / 1000;
+
+    for (uint32_t i = 0; i < cycles; i++) {
+        PORTB |= BUZZER;
+        _delay_loop_2(ticks); 
+        PORTB &= ~BUZZER;
+        _delay_loop_2(ticks);
+    }
+}
+
+void cancion_feliz() {
+    tono(G3, CORCHEA);  tono(C4, CORCHEA);  tono(E4, CORCHEA);  tono(G4, CORCHEA);
+    tono(C5, CORCHEA);  tono(E5, CORCHEA);  tono(G5, NEGRA);    tono(E5, CORCHEA);
+    tono(0, CORCHEA);
+    tono(G3s, CORCHEA); tono(C4, CORCHEA);  tono(D4s, CORCHEA); tono(G4s, CORCHEA);
+    tono(C5, CORCHEA);  tono(D5s, CORCHEA); tono(G5s, NEGRA);   tono(E5, CORCHEA);
+    tono(0, CORCHEA);
+    tono(A3s, CORCHEA); tono(D4, CORCHEA);  tono(F4, CORCHEA);  tono(A4s, CORCHEA);
+    tono(D5, CORCHEA);  tono(F5, CORCHEA);  tono(A5s, NEGRA);   tono(B5, CORCHEA);
+    tono(B5, CORCHEA);  tono(B5, CORCHEA);
+    tono(C6, REDONDA);
+}
+
+void cancion_triste() {
+    tono(C5, NEGRA);    tono(0, CORCHEA);   tono(G4, CORCHEA);  tono(0, NEGRA);
+    tono(E4, CORCHEA);  tono(0, CORCHEA);
+    tono(A4, NEGRA);    tono(B4, NEGRA);    tono(A4, NEGRA);    tono(G4s, NEGRA);
+    tono(A4s, NEGRA);   tono(G4s, NEGRA);
+    tono(G4, CORCHEA);  tono(F4, CORCHEA);  tono(G4, (BLANCA*3)/2);
+}
+
+void mover(char c) {
+    uint8_t v = VEL_RECTO;
+    uint8_t vg = VEL_GIRO;
+    
+    OCR0B=0; PORTD&=~M_IZQ_DIR;
+    OCR2A=0; PORTD&=~M_DER_DIR;
+
+    switch(c) {
+        case 'A': 
+            OCR0B=v; OCR2A=v; 
+            break;
+        case 'E': 
+            PORTD |= M_IZQ_DIR | M_DER_DIR; 
+            OCR0B=v; OCR2A=v; 
+            break;
+        case 'U': 
+            PORTD|=M_IZQ_DIR; 
+            OCR2A=vg; 
+            break;
+        case 'C': 
+            OCR0B=vg; 
+            PORTD|=M_DER_DIR; 
+            break;
+        case 'H': 
+        case 'I': 
+            OCR1A=SERVO_POS_PATEAR; 
+            break;
+        case 'J': 
+        case 'K': 
+            OCR1A=SERVO_POS_REPOSO; 
+            break;
+    }
+}
+
+void ws2812_send() {
+    cli(); 
+    uint8_t mask;
+    for(int i=0; i<64; i++){
+        uint8_t c[3]={leds[i].g, leds[i].r, leds[i].b};
+        for(int k=0; k<3; k++){
+            mask=0x80;
+            while(mask){
+                if(c[k] & mask){
+                    PORTC|=DATA_PIN; 
+                    asm volatile("nop\nnop\nnop\nnop\nnop\nnop");
+                    PORTC&=~DATA_PIN; 
+                    asm volatile("nop\nnop");
+                } else {
+                    PORTC|=DATA_PIN; 
+                    asm volatile("nop\nnop");
+                    PORTC&=~DATA_PIN; 
+                    asm volatile("nop\nnop\nnop\nnop\nnop\nnop");
+                }
+                mask>>=1;
+            }
+        }
+    } 
+    sei(); 
+}
+
+void set_frame(const uint8_t* f) {
+    for(int i=0; i<64; i++){
+        uint8_t v = pgm_read_byte(&f[i]);
+        leds[i] = (Color){0,0,0};
+        if(v==1)      leds[i]=(Color){40,0,0};
+        else if(v==2) leds[i]=(Color){0,40,0};
+        else if(v==3) leds[i]=(Color){30,30,0};
+        else if(v==4) leds[i]=(Color){0,0,40};
+        else if(v==5) leds[i]=(Color){0,30,30};
+        else if(v==7) leds[i]=(Color){30,30,30};
+    }
+    ws2812_send();
+}
+
+int main() {
+    hardware_init();
+    mpu_init();
+    
+    DDRD &= ~US_ECHO;
+    uart_send("ROBOT MUSICAL LISTO\r\n");
+    
+    sei(); 
+
+    uint8_t cnt_sensor = 0;
+
+    while(1) {
+        if(nuevo_comando) {
+            nuevo_comando=0;
+            char c = comando_uart;
+            
+            if(c==CMD_FELIZ)       { cara_actual=1; cancion_feliz(); }
+            else if(c==CMD_TRISTE) { cara_actual=2; cancion_triste(); }
+            else if(c==CMD_ENOJADA){ cara_actual=3; }
+            else if(c==CMD_EMOCIONADA){ cara_actual=0; }
+            else { mover(c); }
+        }
+
+        if(cara_actual == 3) {
+            PORTB |= BUZZER;
+            _delay_us(500); 
+            PORTB &= ~BUZZER;
+            _delay_ms(50);
+        }
+
+        if(++cnt_sensor > 5) {
+            cnt_sensor = 0;
+            
+            PORTB|=US_TRIG; _delay_us(10); PORTB&=~US_TRIG;
+            
+            uint16_t t=0, to=0;
+            while(!(PIND&US_ECHO) && to<2000) { to++; _delay_us(1); }
+            
+            if(to<2000) {
+                while((PIND&US_ECHO) && t<4000) { t++; _delay_us(10); }
+                if(t>0 && ((t*10)/58) < 20) uart_send("! OBS !\r\n");
+            }
+
+            int16_t gyro = leer_gyro_z();
+            if(gyro < -8000 || gyro > 8000) uart_send("! VUELCO !\r\n");
+        }
+
+        if(++anim_tick > 3) {
+            anim_tick = 0; 
+            anim_frame = !anim_frame;
+            
+            const uint8_t *f = frame_emocionada_1;
+            
+            if(cara_actual==0) f = anim_frame ? frame_emocionada_2 : frame_emocionada_1;
+            else if(cara_actual==1) f = anim_frame ? frame_feliz_2 : frame_feliz_1;
+            else if(cara_actual==2) f = anim_frame ? frame_triste_2 : frame_triste_1;
+            else if(cara_actual==3) f = anim_frame ? frame_enojada_2 : frame_enojada_1;
+            
+            set_frame(f);
+        }
+
+        if(cara_actual != 3) _delay_ms(20);
+    }
+    return 0;
+}
