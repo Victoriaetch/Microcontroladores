@@ -1,4 +1,5 @@
-#define F_CPU 16000000UL
+#define F_CPU 16000000UL    // Definimos la velocidad del microcontrolador
+// Librerías estándar de AVR
 #include <avr/io.h>
 #include <util/delay.h>
 #include <util/delay_basic.h>
@@ -6,8 +7,7 @@
 #include <avr/pgmspace.h>
 #include <stdint.h>
 
-// --- CARAS ROTADAS 180 GRADOS ---
-
+// DEFINICIÓN DE CARAS; Se guardan en PROGMEM para no llenar la memoria RAM. Los números representan códigos de color internos.
 const uint8_t frame_feliz_1[] PROGMEM = {
     2,2,2,2,2,2,2,2, 2,2,6,6,6,6,2,2, 2,2,2,2,2,2,2,2, 2,6,2,2,2,2,6,2,
     2,2,2,2,2,2,2,2, 2,7,5,2,2,5,7,2, 2,6,5,2,2,5,6,2, 2,2,6,2,2,6,2,2
@@ -48,14 +48,18 @@ const uint8_t frame_emocionada_2[] PROGMEM = {
     3,6,3,3,3,3,6,3, 3,3,6,3,3,6,3,3, 3,3,3,3,3,3,3,3, 3,3,3,3,3,3,3,3
 };
 
+// CONSTANTES Y CONFIGURACIÓN
 #define BAUD 9600
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
+// Velocidades PWM de los motores (0 a 255)
 #define VEL_RECTO 180
 #define VEL_GIRO  140
 #define VEL_LENTO 90
+// Valores para el Timer1 (Servo de 16 bits)
 #define SERVO_POS_REPOSO 3000 
 #define SERVO_POS_PATEAR 4800 
 
+// Frecuencias de notas musicales (Hz)
 #define G3 196
 #define G3s 208
 #define A3 220
@@ -83,11 +87,13 @@ const uint8_t frame_emocionada_2[] PROGMEM = {
 #define B5 988
 #define C6 1047
 
+// Duración de las notas en milisegundos
 #define NEGRA   400
 #define CORCHEA (NEGRA/2)
 #define BLANCA  (NEGRA*2)
 #define REDONDA (NEGRA*4)
 
+// Mapeo de Pines
 #define M_IZQ_PWM (1 << PD5)
 #define M_IZQ_DIR (1 << PD4)
 #define M_DER_PWM (1 << PB3)
@@ -98,44 +104,51 @@ const uint8_t frame_emocionada_2[] PROGMEM = {
 #define BUZZER    (1 << PB4)
 #define DATA_PIN  (1 << PC3)
 
+// Comandos recibidos por Bluetooth/Serial
 #define CMD_FELIZ      'O'
 #define CMD_TRISTE     'N'
 #define CMD_ENOJADA    'X'
 #define CMD_EMOCIONADA 'M'
 
+// Variables Volátiles
 volatile char comando_uart = 0;
 volatile uint8_t nuevo_comando = 0;
 volatile uint8_t cara_actual = 0;
 volatile uint8_t anim_frame = 0;
 volatile uint16_t anim_tick = 0;
 
+// Estructura para guardar colores RGB
 typedef struct { uint8_t r,g,b; } Color;
 Color leds[64];
 
+// INICIALIZACIÓN DE HARDWARE
 void hardware_init() {
+// Configurar pines como SALIDA (1) en los registros DDR (Data Direction Register)
     DDRD |= M_IZQ_PWM | M_IZQ_DIR | M_DER_DIR;
     DDRB |= M_DER_PWM | SERVO_PIN | US_TRIG | BUZZER;
     DDRC |= DATA_PIN;
-
+// Configuración Timer 0 (Motor Izquierdo - 8 bits)
     TCCR0A = (1<<WGM01)|(1<<WGM00)|(1<<COM0B1); 
     TCCR0B = (1<<CS01)|(1<<CS00);
-
+// Configuración Timer 2 (Motor Derecho - 8 bits)
     TCCR2A = (1<<WGM21)|(1<<WGM20)|(1<<COM2A1); 
     TCCR2B = (1<<CS22);
-
+// Configuración Timer 1 (Servo - 16 bits)
     TCCR1A = (1<<COM1A1)|(1<<WGM11); 
     TCCR1B = (1<<WGM13)|(1<<WGM12)|(1<<CS11);
     ICR1 = 39999; 
     OCR1A = SERVO_POS_REPOSO;
-
+// Configuración I2C (TWI) para el Giroscopio
     TWSR=0; TWBR=72; TWCR=(1<<TWEN);
-
+// Configuración UART (Serial)
     UBRR0H=UBRR_VALUE>>8; UBRR0L=UBRR_VALUE; 
+// Habilitar TX, RX e Interrupción de recepción
     UCSR0B=(1<<TXEN0)|(1<<RXEN0)|(1<<RXCIE0); 
     UCSR0C=(1<<UCSZ01)|(1<<UCSZ00);
 }
-
+// FUNCIONES DEL GIROSCOPIO (I2C MANUAL)
 void mpu_init() {
+// Secuencia I2C para "despertar" el MPU6050
     TWCR=(1<<TWINT)|(1<<TWSTA)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
     TWDR=0xD0; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
     TWDR=0x6B; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
@@ -145,6 +158,7 @@ void mpu_init() {
 
 int16_t leer_gyro_z() {
     uint8_t h,l;
+// Lee 2 bytes (High y Low) del registro del eje Z del giroscopio
     TWCR=(1<<TWINT)|(1<<TWSTA)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
     TWDR=0xD0; TWCR=(1<<TWINT)|(1<<TWEN); while(!(TWCR&(1<<TWINT)));
     TWDR=0x47;
@@ -157,21 +171,22 @@ int16_t leer_gyro_z() {
     TWCR=(1<<TWINT)|(1<<TWEN);           while(!(TWCR&(1<<TWINT))); l=TWDR;
     
     TWCR=(1<<TWINT)|(1<<TWSTO)|(1<<TWEN);
+// Retorna los dos bytes unidos en un entero de 16 bits
     return (h<<8)|l;
 }
-
+// COMUNICACIÓN SERIAL
 void uart_send(const char* s) { 
     while(*s){ 
         while(!(UCSR0A&(1<<UDRE0))); 
         UDR0=*s++; 
     } 
 }
-
+// Interrupción de Recepción Serial
 ISR(USART_RX_vect) { 
     comando_uart=UDR0; 
     nuevo_comando=1; 
 }
-
+// SONIDO Y MÚSICA; Genera una onda cuadrada en el Buzzer mediante retardos
 void tono(uint16_t freq, uint16_t dur_ms) {
     if (freq == 0) {
         while(dur_ms > 0) { _delay_ms(1); dur_ms--; }
@@ -187,7 +202,7 @@ void tono(uint16_t freq, uint16_t dur_ms) {
         _delay_loop_2(ticks);
     }
 }
-
+// Melodías predefinidas
 void cancion_feliz() {
     tono(G3, CORCHEA);  tono(C4, CORCHEA);  tono(E4, CORCHEA);  tono(G4, CORCHEA);
     tono(C5, CORCHEA);  tono(E5, CORCHEA);  tono(G5, NEGRA);    tono(E5, CORCHEA);
@@ -200,7 +215,6 @@ void cancion_feliz() {
     tono(B5, CORCHEA);  tono(B5, CORCHEA);
     tono(C6, REDONDA);
 }
-
 void cancion_triste() {
     tono(C5, NEGRA);    tono(0, CORCHEA);   tono(G4, CORCHEA);  tono(0, NEGRA);
     tono(E4, CORCHEA);  tono(0, CORCHEA);
@@ -208,7 +222,7 @@ void cancion_triste() {
     tono(A4s, NEGRA);   tono(G4s, NEGRA);
     tono(G4, CORCHEA);  tono(F4, CORCHEA);  tono(G4, (BLANCA*3)/2);
 }
-
+// CONTROL DE MOTORES Y SERVO
 void mover(char c) {
     uint8_t v = VEL_RECTO;
     uint8_t vg = VEL_GIRO;
@@ -263,7 +277,7 @@ void mover(char c) {
             break;
     }
 }
-
+// CONTROL DE LEDS WS2812 (NEOPIXEL)
 void ws2812_send() {
     cli(); 
     uint8_t mask;
@@ -289,7 +303,7 @@ void ws2812_send() {
     } 
     sei(); 
 }
-
+// Decodifica la matriz de PROGMEM y la carga en el buffer de LEDs
 void set_frame(const uint8_t* f) {
     for(int i=0; i<64; i++){
         uint8_t v = pgm_read_byte(&f[i]);
@@ -304,19 +318,20 @@ void set_frame(const uint8_t* f) {
     }
     ws2812_send();
 }
-
+// PROGRAMA PRINCIPAL (MAIN)
 int main() {
-    hardware_init();
-    mpu_init();
+    hardware_init();    // Configurar registros
+    mpu_init();    // Iniciar Giroscopio
     
-    DDRD &= ~US_ECHO;
+    DDRD &= ~US_ECHO;    // Asegurar que Echo es entrada
     uart_send("ROBOT MUSICAL LISTO\r\n");
     
-    sei(); 
+    sei();     // Habilitar interrupciones globalmente
 
-    uint8_t cnt_sensor = 0;
+    uint8_t cnt_sensor = 0;    // Contador para no saturar sensores
 
     while(1) {
+// Procesar comandos si llegó algo por Serial
         if(nuevo_comando) {
             nuevo_comando=0;
             char c = comando_uart;
@@ -334,10 +349,10 @@ int main() {
             PORTB &= ~BUZZER;
             _delay_ms(50);
         }
-
+// Lectura de Sensores
         if(++cnt_sensor > 5) {
             cnt_sensor = 0;
-            
+// Ultrasonido
             PORTB|=US_TRIG; _delay_us(10); PORTB&=~US_TRIG;
             
             uint16_t t=0, to=0;
@@ -347,11 +362,11 @@ int main() {
                 while((PIND&US_ECHO) && t<4000) { t++; _delay_us(10); }
                 if(t>0 && ((t*10)/58) < 20) uart_send("! OBS !\r\n");
             }
-
+// Giroscopio
             int16_t gyro = leer_gyro_z();
             if(gyro < -8000 || gyro > 8000) uart_send("! VUELCO !\r\n");
         }
-
+// Animación de la Cara
         if(++anim_tick > 35
         ) {
             anim_tick = 0; 
@@ -366,7 +381,7 @@ int main() {
             
             set_frame(f);
         }
-
+// Pequeño retardo general para estabilidad
         if(cara_actual != 3) _delay_ms(20);
     }
     return 0;
