@@ -291,6 +291,7 @@ void set_frame(const uint8_t* f) {
         else if(v==3) leds[i]=(Color){30,30,0};
         else if(v==4) leds[i]=(Color){0,0,40};
         else if(v==5) leds[i]=(Color){0,30,30};
+        else if(v==8) leds[i]=(Color){40,0,40};
         else if(v==7) leds[i]=(Color){30,30,30};
     }
     ws2812_send();
@@ -343,7 +344,7 @@ int main() {
             if(gyro < -8000 || gyro > 8000) uart_send("! VUELCO !\r\n");
         }
 
-        if(++anim_tick > 15) {
+        if(++anim_tick > 25) {
             anim_tick = 0; 
             anim_frame = !anim_frame;
             
