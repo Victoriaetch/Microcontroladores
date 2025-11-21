@@ -46,6 +46,7 @@ const uint8_t frame_emocionada_2[] PROGMEM = {
 #define UBRR_VALUE ((F_CPU / 16 / BAUD) - 1)
 #define VEL_RECTO 180
 #define VEL_GIRO  140
+#define VEL_LENTO 90
 #define SERVO_POS_REPOSO 3000 
 #define SERVO_POS_PATEAR 4800 
 
@@ -205,6 +206,7 @@ void cancion_triste() {
 void mover(char c) {
     uint8_t v = VEL_RECTO;
     uint8_t vg = VEL_GIRO;
+    uint8_t vl = VEL_LENTO;
     
     OCR0B=0; PORTD&=~M_IZQ_DIR;
     OCR2A=0; PORTD&=~M_DER_DIR;
@@ -224,6 +226,24 @@ void mover(char c) {
         case 'C': 
             OCR0B=vg; 
             PORTD|=M_DER_DIR; 
+            break;
+        case 'B': 
+            OCR0B = v;  
+            OCR2A = vl; 
+            break;
+        case 'V': 
+            OCR0B = vl; 
+            OCR2A = v;  
+            break;
+        case 'D': 
+            PORTD |= M_IZQ_DIR | M_DER_DIR; 
+            OCR0B = v;  
+            OCR2A = vl; 
+            break;
+        case 'T':
+            PORTD |= M_IZQ_DIR | M_DER_DIR; 
+            OCR0B = vl;
+            OCR2A = v;  
             break;
         case 'H': 
         case 'I': 
