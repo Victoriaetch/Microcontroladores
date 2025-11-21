@@ -93,6 +93,12 @@ void UART_init(){
 	UCSR0C=(1<<UCSZ01)|(1<<UCSZ00);
 	}
 
+void delay_variable_ms(uint16_t ms) {
+	for (uint16_t i = 0; i < ms; i++) {
+		_delay_ms(1);
+	}
+}
+
 // WS2812
 void ws2812_send(Color *leds,uint16_t n){
 	cli();
@@ -144,17 +150,17 @@ void mostrarFrameColor(const uint8_t *frame){
 		uint8_t val=pgm_read_byte(&(frame[indice_logico]));
 		
 		switch(val){
-			case 0: leds[i].r=0;   leds[i].g=0;   leds[i].b=0; break;
-			case 1: leds[i].r=15;  leds[i].g=15;  leds[i].b=15; break;
-			case 2: leds[i].r=30; leds[i].g=30; leds[i].b=30; break;
-			case 3: leds[i].r=255; leds[i].g=255; leds[i].b=255; break;
-			case 4: leds[i].r=128; leds[i].g=0;   leds[i].b=32; break;
-			case 10: leds[i].r=255;   leds[i].g=0;   leds[i].b=0; break;
-			case 6: leds[i].r=0;  leds[i].g=0;  leds[i].b=255; break;
+			case 0: leds[i].r=0; leds[i].g=0; leds[i].b=0; break;
+			case 2: leds[i].r=128; leds[i].g=64; leds[i].b=0; break;
+			case 1: leds[i].r=253; leds[i].g=30; leds[i].b=0; break;
+			case 3: leds[i].r=255; leds[i].g=200; leds[i].b=255; break;
+			case 4: leds[i].r=128; leds[i].g=0; leds[i].b=32; break;
+			case 10: leds[i].r=255; leds[i].g=0; leds[i].b=0; break;
+			case 6: leds[i].r=0; leds[i].g=0; leds[i].b=255; break;
 			case 7: leds[i].r=0; leds[i].g=150; leds[i].b=255; break;
 			case 8: leds[i].r=253; leds[i].g=166; leds[i].b=0; break;
-			case 9: leds[i].r=128; leds[i].g=64;   leds[i].b=0; break;
-		    case 11: leds[i].r=0; leds[i].g=255;   leds[i].b=0; break;
+			case 9: leds[i].r=128; leds[i].g=64; leds[i].b=0; break;
+			case 11: leds[i].r=0; leds[i].g=255; leds[i].b=0; break;
 		}
 	}
 	ws2812_send(leds, NUM_LEDS);
@@ -293,6 +299,6 @@ int main(void){
 				}
 			}
 		}
-		_delay_ms(1); // avanza contador 
+		delay_variable_ms(1); // avanza contador 
 	}
 }
